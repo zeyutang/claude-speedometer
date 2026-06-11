@@ -14,10 +14,12 @@ type Row = [string, string];
 interface Section {
   title: string;
   rows: Row[];
+  note?: string;
 }
 
 const GAP = "     "; // spacing between the label and value columns
 const MIN_VALUE_WIDTH = 12; // keep the value column roomy even for small numbers
+const OUTPUT_MIN_WIDTH = 13; // room for up to 1,000,000,000 (10^9 with commas)
 
 /**
  * The overlay shown when hovering the bolt: a rich Markdown box that pops up just
@@ -31,7 +33,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   const latest = store.getLatest();
   if (!latest) {
     md.appendMarkdown(
-      "**Claude Code Speed**\n\nWaiting for the next Claude Code interaction…"
+      "**Claude Speedometer**\n\nWaiting for the next Claude Code interaction…"
     );
     return md;
   }
@@ -66,6 +68,10 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
         ["Total Time", fmtTime(v.totalMs)],
         ["API Requests", String(v.requests)],
       ],
+      note:
+        v.ttftMs > 0
+          ? undefined
+          : "Claude Code does not report time to first token, so generation time equals total time.",
     },
     {
       title: "Cost & Model",
@@ -77,11 +83,31 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
     },
   ];
 
-  // Shared widths across ALL sections so value columns align everywhere.
+  // Build Recent up front so its width takes part in the shared layout and so
+  // the Output column reserves room for large counts.
+  const recent = store.getRecent(6).map((t) => viewOf(t, now));
+  const recentHeaders = ["When", "Output", "tok/sec", "Total"];
+  const recentMin = [0, OUTPUT_MIN_WIDTH, 0, 0];
+  const recentRows = recent.map((r) => [
+    fmtAgo(r.ageMs),
+    fmtInt(r.outputTokens),
+    fmtTokPerSec(r.totalTokPerSec),
+    fmtTime(r.totalMs),
+  ]);
+
+  // One shared right edge across every section (key/value blocks and Recent).
   const allRows = sections.flatMap((s) => s.rows);
   const kw = Math.max(...allRows.map((r) => r[0].length));
-  const vw = Math.max(MIN_VALUE_WIDTH, ...allRows.map((r) => r[1].length));
-  const lineWidth = kw + GAP.length + vw; // right edge shared by every section
+  const vwContent = Math.max(
+    MIN_VALUE_WIDTH,
+    ...allRows.map((r) => r[1].length)
+  );
+  const kvNatural = kw + GAP.length + vwContent;
+  const recentNatural = recentRows.length
+    ? tableWidth(recentHeaders, recentRows, recentMin)
+    : 0;
+  const lineWidth = Math.max(kvNatural, recentNatural);
+  const vw = lineWidth - kw - GAP.length;
 
   for (const s of sections) {
     L.push("", "---", "");
@@ -90,25 +116,18 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
       .map(([k, val]) => `${k.padEnd(kw)}${GAP}${val.padStart(vw)}`)
       .join("\n");
     L.push("```text\n" + body + "\n```");
+    if (s.note) L.push(`*${s.note}*`);
   }
 
-  const recent = store.getRecent(6).map((t) => viewOf(t, now));
-  if (recent.length) {
+  if (recentRows.length) {
     L.push("", "---", "");
     L.push("**Recent**");
     L.push(
       "```text\n" +
-        table(
-          ["When", "Output", "tok/sec", "Total"],
-          ["l", "r", "r", "r"],
-          recent.map((r) => [
-            fmtAgo(r.ageMs),
-            fmtInt(r.outputTokens),
-            fmtTokPerSec(r.totalTokPerSec),
-            fmtTime(r.totalMs),
-          ]),
-          lineWidth
-        ) +
+        table(recentHeaders, ["l", "r", "r", "r"], recentRows, {
+          targetWidth: lineWidth,
+          minWidths: recentMin,
+        }) +
         "\n```"
     );
   }
@@ -117,28 +136,50 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   return md;
 }
 
-/** N-column table with per-column left/right alignment. When targetWidth is
- *  given, the last column is widened so the table's right edge reaches it. */
+const SEP = "   "; // column separator for tables
+
+function colWidths(
+  headers: string[],
+  rows: string[][],
+  minWidths?: number[]
+): number[] {
+  return headers.map((h, i) =>
+    Math.max(h.length, minWidths?.[i] ?? 0, ...rows.map((r) => r[i].length))
+  );
+}
+
+/** Natural total width of a table (sum of columns plus separators). */
+function tableWidth(
+  headers: string[],
+  rows: string[][],
+  minWidths?: number[]
+): number {
+  const w = colWidths(headers, rows, minWidths);
+  return w.reduce((a, b) => a + b, 0) + SEP.length * (headers.length - 1);
+}
+
+/** N-column table with per-column left/right alignment and optional minimum
+ *  column widths. When targetWidth is given, the last column is widened so the
+ *  table's right edge reaches it. */
 function table(
   headers: string[],
   align: Array<"l" | "r">,
   rows: string[][],
-  targetWidth?: number
+  opts?: { targetWidth?: number; minWidths?: number[] }
 ): string {
-  const sep = "   ";
-  const widths = headers.map((h, i) =>
-    Math.max(h.length, ...rows.map((r) => r[i].length))
-  );
-  if (targetWidth !== undefined) {
+  const widths = colWidths(headers, rows, opts?.minWidths);
+  if (opts?.targetWidth !== undefined) {
     const natural =
-      widths.reduce((a, b) => a + b, 0) + sep.length * (widths.length - 1);
-    if (targetWidth > natural) widths[widths.length - 1] += targetWidth - natural;
+      widths.reduce((a, b) => a + b, 0) + SEP.length * (widths.length - 1);
+    if (opts.targetWidth > natural) {
+      widths[widths.length - 1] += opts.targetWidth - natural;
+    }
   }
   const fmtRow = (cells: string[]) =>
     cells
       .map((c, i) =>
         align[i] === "r" ? c.padStart(widths[i]) : c.padEnd(widths[i])
       )
-      .join(sep);
+      .join(SEP);
   return [fmtRow(headers), ...rows.map(fmtRow)].join("\n");
 }

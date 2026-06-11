@@ -33,6 +33,7 @@ export interface Turn {
   speed?: string;
   sessionId?: string;
   terminalType?: string;
+  workspace?: string; // resolved from session.id -> transcript cwd
 }
 
 /** Read a single OTLP AnyValue into a JS primitive. */
@@ -120,6 +121,7 @@ export interface TurnView {
   speed?: string;
   sessionId?: string;
   terminalType?: string;
+  workspace?: string;
   ageMs: number;
 }
 
@@ -148,6 +150,7 @@ export function viewOf(t: Turn, nowMs: number): TurnView {
     speed: t.speed,
     sessionId: t.sessionId,
     terminalType: t.terminalType,
+    workspace: t.workspace,
     ageMs: Math.max(0, nowMs - t.lastMs),
   };
 }

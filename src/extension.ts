@@ -10,7 +10,7 @@ import {
   TelemetryEnv,
 } from "./claudeSettings";
 
-const DONT_ASK_KEY = "claudeCodeSpeed.dontAskConfigure";
+const DONT_ASK_KEY = "claudeSpeedometer.dontAskConfigure";
 
 let store: SpeedStore | undefined;
 let leader: LeaderManager | undefined;
@@ -37,10 +37,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     { dispose: () => panel?.dispose() },
     { dispose: () => leader?.dispose() },
     { dispose: () => store?.dispose() },
-    vscode.commands.registerCommand("claudeCodeSpeed.togglePanel", () =>
+    vscode.commands.registerCommand("claudeSpeedometer.togglePanel", () =>
       panel?.toggle()
     ),
-    vscode.commands.registerCommand("claudeCodeSpeed.configureTelemetry", () =>
+    vscode.commands.registerCommand("claudeSpeedometer.configureTelemetry", () =>
       configure(readConfig(), true)
     )
   );
@@ -65,7 +65,7 @@ function readConfig(): TelemetryEnv & {
   statusBarPriority: number;
   retentionDays: number;
 } {
-  const c = vscode.workspace.getConfiguration("claudeCodeSpeed");
+  const c = vscode.workspace.getConfiguration("claudeSpeedometer");
   return {
     port: c.get<number>("port", 4318),
     exportIntervalMs: c.get<number>("exportIntervalMs", 2000),
@@ -79,7 +79,7 @@ async function promptToConfigure(
   cfg: TelemetryEnv
 ): Promise<void> {
   const choice = await vscode.window.showInformationMessage(
-    "Claude Code Speed: enable telemetry so this extension can read interaction stats? " +
+    "Claude Speedometer: enable telemetry so this extension can read interaction stats? " +
       "This adds an `env` block to ~/.claude/settings.json (Claude Code must be restarted afterward).",
     "Configure",
     "Not now",
@@ -102,7 +102,7 @@ function configure(cfg: TelemetryEnv, notify: boolean): void {
     }
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Claude Code Speed: failed to write ${settingsPath()}: ${
+      `Claude Speedometer: failed to write ${settingsPath()}: ${
         (err as Error).message
       }`
     );

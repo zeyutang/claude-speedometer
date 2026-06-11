@@ -1,4 +1,4 @@
-# Claude Code Speed
+# Claude Speedometer
 
 A VS Code status-bar indicator showing the **token throughput and timing of your latest Claude Code interaction**.
 
@@ -18,7 +18,7 @@ VS Code extensions can't read Claude Code's internal timing directly, and the tr
 ## Setup
 
 1. Build and run the extension (see Development below), or install the packaged `.vsix`.
-2. On first run it offers to configure Claude Code for you. Accept it, or run **`Claude Code Speed: Configure Claude Code Telemetry`** from the Command Palette. This merges the following into `~/.claude/settings.json` (existing settings are preserved):
+2. On first run it offers to configure Claude Code for you. Accept it, or run **`Claude Speedometer: Configure Claude Code Telemetry`** from the Command Palette. This merges the following into `~/.claude/settings.json` (existing settings are preserved):
 
    ```json
    {
@@ -57,17 +57,17 @@ tok/sec is `output tokens / total request time`, where total request time is the
 
 ## Data & storage
 
-All windows share one small JSON file at `~/.claude-code-speed/state.json`. It holds only the most recent interactions (capped at 50 turns, a few tens of KB at most) and is pruned to the last **7 days** on every update (configurable via `claudeCodeSpeed.retentionDays`). Delete the file any time; it is recreated as needed.
+All windows share one small JSON file at `~/.claude-speedometer/state.json`. It holds only the most recent interactions (capped at 50 turns, a few tens of KB at most) and is pruned to the last **7 days** on every update (configurable via `claudeSpeedometer.retentionDays`). Delete the file any time; it is recreated as needed.
 
 ## Settings
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `claudeCodeSpeed.port` | `4318` | Port the receiver listens on (must match the OTLP endpoint). |
-| `claudeCodeSpeed.speedBasis` | `total` | `total` (output / total time, matches Claude Code) or `generation` (output / generation time). |
-| `claudeCodeSpeed.exportIntervalMs` | `2000` | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive. |
-| `claudeCodeSpeed.statusBarPriority` | `10000` | Higher = further left within the right cluster. |
-| `claudeCodeSpeed.retentionDays` | `7` | Discard interactions older than this many days from the shared history file. |
+| `claudeSpeedometer.port` | `4318` | Port the receiver listens on (must match the OTLP endpoint). |
+| `claudeSpeedometer.speedBasis` | `total` | `total` (output / total time, matches Claude Code) or `generation` (output / generation time). |
+| `claudeSpeedometer.exportIntervalMs` | `2000` | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive. |
+| `claudeSpeedometer.statusBarPriority` | `10000` | Higher = further left within the right cluster. |
+| `claudeSpeedometer.retentionDays` | `7` | Discard interactions older than this many days from the shared history file. |
 
 ## Multi-window behavior
 

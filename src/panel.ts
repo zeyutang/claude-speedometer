@@ -33,8 +33,8 @@ export class StatsPanel {
       return;
     }
     this.panel = vscode.window.createWebviewPanel(
-      "claudeCodeSpeed.stats",
-      "Claude Code Speed",
+      "claudeSpeedometer.stats",
+      "Claude Speedometer",
       { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
       { enableScripts: false, retainContextWhenHidden: true }
     );
@@ -67,7 +67,7 @@ export class StatsPanel {
         <p>No interactions captured yet.</p>
         <p class="muted">Once Claude Code finishes a request, its throughput and
         timing will appear here. If nothing shows up after a request, run
-        <code>Claude Code Speed: Configure Claude Code Telemetry</code> from the
+        <code>Claude Speedometer: Configure Claude Code Telemetry</code> from the
         Command Palette, then restart Claude Code.</p>
       </div>`;
   }
@@ -117,6 +117,11 @@ export class StatsPanel {
         ["Output Tokens / sec", `${fmtTokPerSec(v.totalTokPerSec)} t/s`],
         ["API Requests", String(v.requests)],
       ])}
+      ${
+        v.ttftMs > 0
+          ? ""
+          : `<p class="muted note">Claude Code does not report time to first token, so generation time equals total time.</p>`
+      }
 
       <hr />
       <h3>Cost &amp; Model</h3>
@@ -130,7 +135,7 @@ export class StatsPanel {
       <h3>Context</h3>
       ${kv([
         ["Session", v.sessionId ? v.sessionId.slice(0, 8) : "-"],
-        ["Terminal", v.terminalType ?? "-"],
+        ["Workspace", v.workspace ?? "-"],
       ])}
 
       <hr />

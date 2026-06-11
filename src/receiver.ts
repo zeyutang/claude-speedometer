@@ -7,7 +7,7 @@ import { Attrs, readAttributes, readAnyValue } from "./types";
 
 const DIAG_FILE = path.join(
   os.homedir(),
-  ".claude-code-speed",
+  ".claude-speedometer",
   "debug-last-event.json"
 );
 

@@ -61,7 +61,7 @@ export class LeaderManager {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "EADDRINUSE") {
-        console.error("[claude-code-speed] receiver error:", err);
+        console.error("[claude-speedometer] receiver error:", err);
       }
       receiver.dispose();
       return; // stay a follower

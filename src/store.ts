@@ -6,7 +6,7 @@ import { Snapshot, Turn, selectLatest, selectRecent } from "./types";
 
 // A stable, user-visible location shared by every VS Code window. (os.tmpdir()
 // can differ between the extension host and a terminal on macOS, so we avoid it.)
-const DIR = path.join(os.homedir(), ".claude-code-speed");
+const DIR = path.join(os.homedir(), ".claude-speedometer");
 const FILE = path.join(DIR, "state.json");
 const BASENAME = "state.json";
 

@@ -21,8 +21,8 @@ export class SpeedStatusBar {
       vscode.StatusBarAlignment.Right,
       priority
     );
-    this.item.command = "claudeCodeSpeed.togglePanel";
-    this.item.name = "Claude Code Speed";
+    this.item.command = "claudeSpeedometer.togglePanel";
+    this.item.name = "Claude Speedometer";
     this.render();
     this.item.show();
     this.store.on("update", () => this.render());
@@ -56,7 +56,7 @@ export class SpeedStatusBar {
 function speedBasisValue(turn: Turn): number {
   const v = viewOf(turn, Date.now());
   const basis = vscode.workspace
-    .getConfiguration("claudeCodeSpeed")
+    .getConfiguration("claudeSpeedometer")
     .get<string>("speedBasis", "total");
   return basis === "generation" ? v.generationTokPerSec : v.totalTokPerSec;
 }

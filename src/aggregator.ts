@@ -8,6 +8,7 @@ import {
   selectRecent,
   str,
 } from "./types";
+import { resolveWorkspace } from "./workspace";
 
 const MAX_TURNS = 50;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -77,6 +78,9 @@ export class Aggregator extends EventEmitter {
     if (sessionId) turn.sessionId = sessionId;
     const terminal = str(attrs, "terminal.type");
     if (terminal) turn.terminalType = terminal;
+    if (!turn.workspace && turn.sessionId) {
+      turn.workspace = resolveWorkspace(turn.sessionId);
+    }
 
     // A new turn began: the previous running turn is now complete -> display it.
     if (promptId !== this.runningId) {
