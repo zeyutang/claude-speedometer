@@ -36,7 +36,7 @@ export class SpeedStatusBar {
 
   private render(): void {
     const turn = this.store.getLatest();
-    const speedStr = turn ? fmtTokPerSec(speedBasisValue(turn)) : "—";
+    const speedStr = turn ? fmtTokPerSec(speedBasisValue(turn)) : "-";
 
     this.item.text = `$(zap) ${speedStr} tok/sec`;
     // VS Code only honors two themed *backgrounds* for status-bar items, so a

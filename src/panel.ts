@@ -122,15 +122,15 @@ export class StatsPanel {
       <h3>Cost &amp; Model</h3>
       ${kv([
         ["Estimated Cost", fmtCost(v.costUsd)],
-        ["Model", v.model ?? "—"],
+        ["Model", v.model ?? "-"],
         ["Fast mode", fmtFastMode(v.speed)],
       ])}
 
       <hr />
       <h3>Context</h3>
       ${kv([
-        ["Session", v.sessionId ? v.sessionId.slice(0, 8) : "—"],
-        ["Terminal", v.terminalType ?? "—"],
+        ["Session", v.sessionId ? v.sessionId.slice(0, 8) : "-"],
+        ["Terminal", v.terminalType ?? "-"],
       ])}
 
       <hr />

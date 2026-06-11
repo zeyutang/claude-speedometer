@@ -8,7 +8,7 @@ export function fmtTokPerSec(n: number): string {
 
 /** ms -> "812 ms" or "15.1 s". */
 export function fmtTime(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) return "—";
+  if (!Number.isFinite(ms) || ms <= 0) return "-";
   if (ms < 1000) return `${Math.round(ms)} ms`;
   return `${(ms / 1000).toFixed(1)} s`;
 }
@@ -21,7 +21,7 @@ export function fmtCost(usd: number): string {
 
 /** Claude Code's `speed` attribute -> fast-mode On/Off. */
 export function fmtFastMode(speed: string | undefined): string {
-  if (!speed) return "—";
+  if (!speed) return "-";
   return speed.toLowerCase() === "fast" ? "On" : "Off";
 }
 

@@ -43,11 +43,11 @@ VS Code extensions can't read Claude Code's internal timing directly, and the tr
 
 Both the overlay and the tab are organized into sections:
 
-- **Speed** — output tokens/sec (total basis), with the generation-only figure.
-- **Tokens** — input, output, cache-write, cache-read, total.
-- **Timing** — time to first token, generation time, total time, API requests.
-- **Cost & Model** — estimated cost, model, and whether fast mode is on.
-- **Recent** — the last several interactions at a glance.
+- **Speed**: output tokens/sec (total basis), with the generation-only figure.
+- **Tokens**: input, output, cache-write, cache-read, total.
+- **Timing**: time to first token, generation time, total time, API requests.
+- **Cost & Model**: estimated cost, model, and whether fast mode is on.
+- **Recent**: the last several interactions at a glance.
 
 > VS Code has no API for a free-floating, click-pinned overlay at a screen corner. The status-bar hover tooltip is the native equivalent: a rich box that appears in the lower-right, right above the bolt.
 

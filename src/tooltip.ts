@@ -71,7 +71,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
       title: "Cost & Model",
       rows: [
         ["Estimated Cost", fmtCost(v.costUsd)],
-        ["Model", v.model ?? "—"],
+        ["Model", v.model ?? "-"],
         ["Fast mode", fmtFastMode(v.speed)],
       ],
     },
