@@ -1,0 +1,79 @@
+{
+  "name": "claude-code-speed",
+  "displayName": "Claude Code Speed",
+  "description": "Status-bar indicator showing the token throughput and timing of your latest Claude Code interaction.",
+  "version": "1.0.0",
+  "publisher": "zeyutang",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeCodeSpeed.togglePanel",
+        "title": "Claude Code Speed: Show / Hide Stats Tab"
+      },
+      {
+        "command": "claudeCodeSpeed.configureTelemetry",
+        "title": "Claude Code Speed: Configure Claude Code Telemetry"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Code Speed",
+      "properties": {
+        "claudeCodeSpeed.port": {
+          "type": "number",
+          "default": 4318,
+          "description": "Localhost port the embedded OTLP/HTTP receiver listens on. Must match the OTEL_EXPORTER_OTLP_ENDPOINT configured for Claude Code."
+        },
+        "claudeCodeSpeed.speedBasis": {
+          "type": "string",
+          "enum": [
+            "total",
+            "generation"
+          ],
+          "enumDescriptions": [
+            "output tokens / total request time (matches Claude Code's 'Output Tokens / sec')",
+            "output tokens / generation time (total minus time-to-first-token)"
+          ],
+          "default": "total",
+          "description": "How the tok/sec figure on the status bar is computed."
+        },
+        "claudeCodeSpeed.exportIntervalMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "OTEL_LOGS_EXPORT_INTERVAL written when auto-configuring Claude Code. Lower = more responsive status bar, more frequent exports."
+        },
+        "claudeCodeSpeed.statusBarPriority": {
+          "type": "number",
+          "default": 10000,
+          "description": "Status bar priority. Higher = further left within the right-hand cluster."
+        },
+        "claudeCodeSpeed.retentionDays": {
+          "type": "number",
+          "default": 7,
+          "description": "Discard interactions older than this many days from the shared history file (~/.claude-code-speed/state.json)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
