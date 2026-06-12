@@ -1,15 +1,6 @@
 import * as http from "http";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 import { Aggregator } from "./aggregator";
 import { Attrs, readAttributes, readAnyValue } from "./types";
-
-const DIAG_FILE = path.join(
-  os.homedir(),
-  ".claude-speedometer",
-  "debug-last-event.json"
-);
 
 /**
  * Minimal OTLP/HTTP (http/json) receiver. Accepts log exports from Claude Code
@@ -71,23 +62,6 @@ export class OtlpReceiver {
     });
   }
 
-  /** Records the exact attribute keys of the latest api_request, to diagnose
-   *  which timing fields Claude Code actually emits (e.g. ttft_ms). */
-  private writeDiag(attrs: Attrs): void {
-    try {
-      const diag = {
-        keys: Object.keys(attrs).sort(),
-        ttft_ms: attrs["ttft_ms"] ?? null,
-        duration_ms: attrs["duration_ms"] ?? null,
-        output_tokens: attrs["output_tokens"] ?? null,
-        speed: attrs["speed"] ?? null,
-      };
-      fs.writeFileSync(DIAG_FILE, JSON.stringify(diag, null, 2), "utf8");
-    } catch {
-      /* best-effort */
-    }
-  }
-
   private ingestLogs(body: string): void {
     const payload = JSON.parse(body) as {
       resourceLogs?: Array<{
@@ -113,7 +87,6 @@ export class OtlpReceiver {
             (readAnyValue(rec.body) as string | undefined);
           if (!eventName) continue;
 
-          if (eventName.endsWith("api_request")) this.writeDiag(attrs);
           this.agg.handleEvent(eventName, attrs);
         }
       }

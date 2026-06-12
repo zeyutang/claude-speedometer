@@ -6,12 +6,12 @@ const PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 const cache = new Map<string, string | undefined>();
 
 /**
- * Resolve a Claude Code session id to its workspace folder name.
+ * Resolve a Claude Code session id to its workspace directory (full path).
  *
  * Telemetry events carry no working directory, but each session's transcript
  * lives at ~/.claude/projects/<dir>/<session.id>.jsonl and records its `cwd`.
- * We locate that file and return the basename of its cwd. Results are cached
- * (the leader calls this once per session as events arrive).
+ * We locate that file and return its cwd. Results are cached (the leader calls
+ * this once per session as events arrive).
  */
 export function resolveWorkspace(sessionId: string): string | undefined {
   if (cache.has(sessionId)) return cache.get(sessionId);
@@ -21,7 +21,7 @@ export function resolveWorkspace(sessionId: string): string | undefined {
     for (const dir of fs.readdirSync(PROJECTS_DIR)) {
       const file = path.join(PROJECTS_DIR, dir, `${sessionId}.jsonl`);
       if (fs.existsSync(file)) {
-        result = basenameOfCwd(file);
+        result = cwdOf(file);
         break;
       }
     }
@@ -33,8 +33,8 @@ export function resolveWorkspace(sessionId: string): string | undefined {
   return result;
 }
 
-/** Read the first transcript entry that carries a `cwd` and return its basename. */
-function basenameOfCwd(file: string): string | undefined {
+/** Read the first transcript entry that carries a `cwd` and return it. */
+function cwdOf(file: string): string | undefined {
   try {
     const fd = fs.openSync(file, "r");
     const buf = Buffer.alloc(16384);
@@ -44,7 +44,7 @@ function basenameOfCwd(file: string): string | undefined {
       if (!line.trim()) continue;
       try {
         const cwd = (JSON.parse(line) as { cwd?: unknown }).cwd;
-        if (typeof cwd === "string" && cwd) return path.basename(cwd);
+        if (typeof cwd === "string" && cwd) return cwd;
       } catch {
         /* truncated last line in the chunk */
       }

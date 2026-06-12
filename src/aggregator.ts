@@ -74,6 +74,8 @@ export class Aggregator extends EventEmitter {
     if (model) turn.model = model;
     const speed = str(attrs, "speed");
     if (speed) turn.speed = speed;
+    const effort = str(attrs, "effort");
+    if (effort) turn.effort = effort;
     const sessionId = str(attrs, "session.id");
     if (sessionId) turn.sessionId = sessionId;
     const terminal = str(attrs, "terminal.type");

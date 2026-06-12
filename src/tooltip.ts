@@ -3,10 +3,11 @@ import { SpeedStore } from "./store";
 import {
   fmtAgo,
   fmtCost,
-  fmtFastMode,
+  fmtEffort,
   fmtInt,
   fmtTime,
   fmtTokPerSec,
+  isFastModeOn,
 } from "./format";
 import { viewOf } from "./types";
 
@@ -14,7 +15,6 @@ type Row = [string, string];
 interface Section {
   title: string;
   rows: Row[];
-  note?: string;
 }
 
 const GAP = "     "; // spacing between the label and value columns
@@ -43,11 +43,11 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   const L: string[] = [];
   L.push(`**Latest interaction** · ${fmtAgo(v.ageMs)}`);
   L.push("");
-  L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/sec`);
+  L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/s`);
   L.push(
     `output / total time · generation ${fmtTokPerSec(
       v.generationTokPerSec
-    )} tok/sec`
+    )} tok/s`
   );
 
   const sections: Section[] = [
@@ -68,17 +68,15 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
         ["Total Time", fmtTime(v.totalMs)],
         ["API Requests", String(v.requests)],
       ],
-      note:
-        v.ttftMs > 0
-          ? undefined
-          : "Claude Code does not report time to first token, so generation time equals total time.",
     },
     {
       title: "Cost & Model",
       rows: [
         ["Estimated Cost", fmtCost(v.costUsd)],
         ["Model", v.model ?? "-"],
-        ["Fast mode", fmtFastMode(v.speed)],
+        ["Effort", fmtEffort(v.effort)],
+        // Fast mode row appears only when the model supports it and it is on.
+        ...(isFastModeOn(v.speed) ? [["Fast mode", "On"] as Row] : []),
       ],
     },
   ];
@@ -86,7 +84,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   // Build Recent up front so its width takes part in the shared layout and so
   // the Output column reserves room for large counts.
   const recent = store.getRecent(6).map((t) => viewOf(t, now));
-  const recentHeaders = ["When", "Output", "tok/sec", "Total"];
+  const recentHeaders = ["When", "Output", "tok/s", "Total"];
   const recentMin = [0, OUTPUT_MIN_WIDTH, 0, 0];
   const recentRows = recent.map((r) => [
     fmtAgo(r.ageMs),
@@ -116,7 +114,6 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
       .map(([k, val]) => `${k.padEnd(kw)}${GAP}${val.padStart(vw)}`)
       .join("\n");
     L.push("```text\n" + body + "\n```");
-    if (s.note) L.push(`*${s.note}*`);
   }
 
   if (recentRows.length) {

@@ -19,10 +19,15 @@ export function fmtCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-/** Claude Code's `speed` attribute -> fast-mode On/Off. */
-export function fmtFastMode(speed: string | undefined): string {
-  if (!speed) return "-";
-  return speed.toLowerCase() === "fast" ? "On" : "Off";
+/** Claude Code's `speed` attribute: true only when fast mode is on. */
+export function isFastModeOn(speed: string | undefined): boolean {
+  return (speed ?? "").toLowerCase() === "fast";
+}
+
+/** Claude Code's `effort` attribute, presented for display ("-" if absent). */
+export function fmtEffort(effort: string | undefined): string {
+  if (!effort) return "-";
+  return effort.charAt(0).toUpperCase() + effort.slice(1);
 }
 
 /** ms-ago -> "just now" / "12s ago" / "3m ago" / "1h ago". */

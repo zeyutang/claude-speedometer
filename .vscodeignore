@@ -4,3 +4,6 @@ node_modules/**
 **/*.map
 **/tsconfig.json
 .gitignore
+.remarkignore
+.DS_Store
+claude-speedometer-icon.png

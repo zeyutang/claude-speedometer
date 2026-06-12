@@ -31,6 +31,7 @@ export interface Turn {
   // context (last-write-wins; stable within a turn anyway)
   model?: string;
   speed?: string;
+  effort?: string;
   sessionId?: string;
   terminalType?: string;
   workspace?: string; // resolved from session.id -> transcript cwd
@@ -119,6 +120,7 @@ export interface TurnView {
   costUsd: number;
   model?: string;
   speed?: string;
+  effort?: string;
   sessionId?: string;
   terminalType?: string;
   workspace?: string;
@@ -148,6 +150,7 @@ export function viewOf(t: Turn, nowMs: number): TurnView {
     costUsd: t.costUsd,
     model: t.model,
     speed: t.speed,
+    effort: t.effort,
     sessionId: t.sessionId,
     terminalType: t.terminalType,
     workspace: t.workspace,

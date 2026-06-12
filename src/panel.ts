@@ -3,10 +3,11 @@ import { SpeedStore } from "./store";
 import {
   fmtAgo,
   fmtCost,
-  fmtFastMode,
+  fmtEffort,
   fmtInt,
   fmtTime,
   fmtTokPerSec,
+  isFastModeOn,
 } from "./format";
 import { Turn, TurnView, viewOf } from "./types";
 
@@ -93,10 +94,10 @@ export class StatsPanel {
 
       <div class="hero">
         <span class="hero-num">${fmtTokPerSec(v.totalTokPerSec)}</span>
-        <span class="hero-unit">tok/sec</span>
+        <span class="hero-unit">tok/s</span>
         <span class="muted">(generation: ${fmtTokPerSec(
           v.generationTokPerSec
-        )} tok/sec)</span>
+        )} tok/s)</span>
       </div>
 
       <hr />
@@ -114,13 +115,13 @@ export class StatsPanel {
         ["Time to First Token", fmtTime(v.ttftMs)],
         ["Generation Time", fmtTime(v.generationMs)],
         ["Total Time", fmtTime(v.totalMs)],
-        ["Output Tokens / sec", `${fmtTokPerSec(v.totalTokPerSec)} t/s`],
+        ["Output Tokens / s", `${fmtTokPerSec(v.totalTokPerSec)} tok/s`],
         ["API Requests", String(v.requests)],
       ])}
       ${
         v.ttftMs > 0
           ? ""
-          : `<p class="muted note">Claude Code does not report time to first token, so generation time equals total time.</p>`
+          : `<p class="muted note">Claude Code does not yet report time to first token, so generation time equals total time.</p>`
       }
 
       <hr />
@@ -128,14 +129,20 @@ export class StatsPanel {
       ${kv([
         ["Estimated Cost", fmtCost(v.costUsd)],
         ["Model", v.model ?? "-"],
-        ["Fast mode", fmtFastMode(v.speed)],
+        ["Effort", fmtEffort(v.effort)],
+        // Fast mode row appears only when the model supports it and it is on.
+        ...(isFastModeOn(v.speed)
+          ? [["Fast mode", "On"] as [string, string]]
+          : []),
       ])}
 
       <hr />
       <h3>Context</h3>
       ${kv([
         ["Session", v.sessionId ? v.sessionId.slice(0, 8) : "-"],
-        ["Workspace", v.workspace ?? "-"],
+        v.workspace
+          ? ["Workspace", ellipsizeLeft(v.workspace, 48), v.workspace]
+          : ["Workspace", "-"],
       ])}
 
       <hr />
@@ -147,7 +154,7 @@ export class StatsPanel {
           <col style="width:22%" />
           <col style="width:22%" />
         </colgroup>
-        <thead><tr><th>When</th><th class="num">Output</th><th class="num">tok/sec</th><th class="num">Total</th></tr></thead>
+        <thead><tr><th>When</th><th class="num">Output</th><th class="num">tok/s</th><th class="num">Total</th></tr></thead>
         <tbody>${recentRows}</tbody>
       </table>
       <p class="muted note">Each row aggregates all API calls (including tool
@@ -156,15 +163,22 @@ export class StatsPanel {
   }
 }
 
-function kv(rows: Array<[string, string]>): string {
+function kv(rows: Array<[string, string] | [string, string, string]>): string {
   return `<div class="kv">${rows
-    .map(
-      ([k, val]) =>
-        `<div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(
-          val
-        )}</div>`
-    )
+    .map(([k, val, title]) => {
+      const t = title ? ` title="${escapeHtml(title)}"` : "";
+      return `<div class="k">${escapeHtml(k)}</div><div class="v"${t}>${escapeHtml(
+        val
+      )}</div>`;
+    })
     .join("")}</div>`;
+}
+
+/** Truncate from the left, keeping the right-most portion, prefixed with "…".
+ *  Used for long workspace paths so the most specific folder stays visible. */
+function ellipsizeLeft(s: string, max: number): string {
+  if (s.length <= max) return s;
+  return "…" + s.slice(-(max - 1));
 }
 
 function escapeHtml(s: string): string {

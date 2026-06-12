@@ -1,17 +1,33 @@
 {
   "name": "claude-speedometer",
   "displayName": "Claude Speedometer",
-  "description": "Status-bar indicator showing the token throughput and timing of your latest Claude Code interaction.",
-  "version": "1.1.0",
+  "description": "Indicator showing the token throughput and timing of your Claude Code interactions.",
+  "version": "1.5.0",
   "publisher": "zeyutang",
-  "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zeyutang/claude-speedometer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zeyutang/claude-speedometer/issues"
+  },
+  "homepage": "https://github.com/zeyutang/claude-speedometer#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
   ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "telemetry",
+    "tokens",
+    "status bar",
+    "throughput"
+  ],
+  "icon": "icon.png",
   "main": "./out/extension.js",
   "activationEvents": [
     "onStartupFinished"
@@ -42,11 +58,11 @@
             "generation"
           ],
           "enumDescriptions": [
-            "output tokens / total request time (matches Claude Code's 'Output Tokens / sec')",
+            "output tokens / total request time (Claude Code's output tokens / second)",
             "output tokens / generation time (total minus time-to-first-token)"
           ],
           "default": "total",
-          "description": "How the tok/sec figure on the status bar is computed."
+          "description": "How the tok/s figure on the status bar is computed."
         },
         "claudeSpeedometer.exportIntervalMs": {
           "type": "number",
