@@ -6,7 +6,7 @@ The bolt sits in the right-hand status-bar cluster: `↯ 68.20 tok/s`, and updat
 
 ## What it looks like
 
-| ![Hover overlay showing the full stats breakdown](tooltip-view.png) | ![Stats tab with the full per-interaction breakdown](tabview-partial.png) |
+| ![Hover overlay showing the full stats breakdown](tooltip.png) | ![Stats tab with the full per-interaction breakdown](panel.png) |
 | :---: | :---: |
 | *Hover the bolt for a quick overlay* | *Click it for the full stats tab* |
 
