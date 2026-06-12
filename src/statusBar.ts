@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { SpeedStore } from "./store";
 import { fmtTokPerSec } from "./format";
-import { Turn, viewOf } from "./types";
+import { viewOf } from "./types";
 import { buildTooltip } from "./tooltip";
 
 /**
@@ -36,7 +36,9 @@ export class SpeedStatusBar {
 
   private render(): void {
     const turn = this.store.getLatest();
-    const speedStr = turn ? fmtTokPerSec(speedBasisValue(turn)) : "-";
+    const speedStr = turn
+      ? fmtTokPerSec(viewOf(turn, Date.now()).totalTokPerSec)
+      : "-";
 
     this.item.text = `$(zap) ${speedStr} tok/s`;
     // While the stats tab is open, accent the bolt's text/icon instead of a
@@ -51,12 +53,4 @@ export class SpeedStatusBar {
   dispose(): void {
     this.item.dispose();
   }
-}
-
-function speedBasisValue(turn: Turn): number {
-  const v = viewOf(turn, Date.now());
-  const basis = vscode.workspace
-    .getConfiguration("claudeSpeedometer")
-    .get<string>("speedBasis", "total");
-  return basis === "generation" ? v.generationTokPerSec : v.totalTokPerSec;
 }

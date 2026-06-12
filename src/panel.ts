@@ -95,9 +95,7 @@ export class StatsPanel {
       <div class="hero">
         <span class="hero-num">${fmtTokPerSec(v.totalTokPerSec)}</span>
         <span class="hero-unit">tok/s</span>
-        <span class="muted">(generation: ${fmtTokPerSec(
-          v.generationTokPerSec
-        )} tok/s)</span>
+        <span class="muted">output tokens / total request time</span>
       </div>
 
       <hr />
@@ -112,17 +110,10 @@ export class StatsPanel {
       <hr />
       <h3>Timing</h3>
       ${kv([
-        ["Time to First Token", fmtTime(v.ttftMs)],
-        ["Generation Time", fmtTime(v.generationMs)],
-        ["Total Time", fmtTime(v.totalMs)],
+        ["Total Request Time", fmtTime(v.totalMs)],
         ["Output Tokens / s", `${fmtTokPerSec(v.totalTokPerSec)} tok/s`],
         ["API Requests", String(v.requests)],
       ])}
-      ${
-        v.ttftMs > 0
-          ? ""
-          : `<p class="muted note">Claude Code does not yet report time to first token, so generation time equals total time.</p>`
-      }
 
       <hr />
       <h3>Cost &amp; Model</h3>

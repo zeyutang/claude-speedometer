@@ -44,11 +44,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   L.push(`**Latest interaction** · ${fmtAgo(v.ageMs)}`);
   L.push("");
   L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/s`);
-  L.push(
-    `output / total time · generation ${fmtTokPerSec(
-      v.generationTokPerSec
-    )} tok/s`
-  );
+  L.push(`output tokens / total request time`);
 
   const sections: Section[] = [
     {
@@ -63,9 +59,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
     {
       title: "Timing",
       rows: [
-        ["Time to First Token", fmtTime(v.ttftMs)],
-        ["Generation Time", fmtTime(v.generationMs)],
-        ["Total Time", fmtTime(v.totalMs)],
+        ["Total Request Time", fmtTime(v.totalMs)],
         ["API Requests", String(v.requests)],
       ],
     },

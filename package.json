@@ -56,19 +56,6 @@
           "default": 4318,
           "description": "Localhost port the embedded OTLP/HTTP receiver listens on. Must match the OTEL_EXPORTER_OTLP_ENDPOINT configured for Claude Code."
         },
-        "claudeSpeedometer.speedBasis": {
-          "type": "string",
-          "enum": [
-            "total",
-            "generation"
-          ],
-          "enumDescriptions": [
-            "output tokens / total request time (Claude Code's output tokens / second)",
-            "output tokens / generation time (total minus time-to-first-token)"
-          ],
-          "default": "total",
-          "description": "How the tok/s figure on the status bar is computed."
-        },
         "claudeSpeedometer.exportIntervalMs": {
           "type": "number",
           "default": 2000,

@@ -35,9 +35,9 @@ Once installed, the extension needs Claude Code to export telemetry to it:
 
 The bolt shows the **last completed** interaction's tok/s. It updates when a turn finishes, not while it is still running, so the figure is stable. The overlay and the tab break the latest turn into sections:
 
-- **Speed**: output tok/s (total basis), with the generation-only figure.
+- **Speed**: output tok/s (output tokens / total request time).
 - **Tokens**: input, output, cache-write, cache-read.
-- **Timing**: time to first token, generation time, total time, API requests.
+- **Timing**: total request time and API request count.
 - **Cost & Model**: estimated cost, model, and reasoning effort. **Fast mode** appears only when it is on.
 - **Recent**: the last several interactions at a glance.
 - **Context** (tab only): the session id and the full workspace path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
@@ -53,7 +53,6 @@ A few things to know about the numbers:
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `claudeSpeedometer.port` | `4318` | Port the receiver listens on (must match the OTLP endpoint). |
-| `claudeSpeedometer.speedBasis` | `total` | `total` (output / total time, matches Claude Code) or `generation` (output / generation time). Affects only the status-bar figure. |
 | `claudeSpeedometer.exportIntervalMs` | `2000` | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive. |
 | `claudeSpeedometer.statusBarPriority` | `10000` | Higher = further left within the right cluster. |
 | `claudeSpeedometer.retentionDays` | `7` | Discard interactions older than this many days. |

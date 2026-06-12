@@ -8,8 +8,7 @@ export type Attrs = Record<string, string | number | boolean>;
 export interface Turn {
   promptId: string;
 
-  // ordering / timing of the turn as a whole
-  firstSeq: number; // smallest event.sequence seen
+  // timing of the turn as a whole
   startMs: number; // wall-clock ms of first event (Date-derived, for "x ago")
   lastMs: number; // wall-clock ms of most recent event
 
@@ -22,9 +21,7 @@ export interface Turn {
   cacheCreationTokens: number;
 
   // timing (ms)
-  totalDurationMs: number; // sum of duration_ms
-  totalTtftMs: number; // sum of ttft_ms (for generation-time math)
-  firstTtftMs: number; // ttft_ms of the turn's first request
+  totalDurationMs: number; // sum of duration_ms (server-measured per request)
 
   costUsd: number;
 
@@ -109,13 +106,10 @@ export interface TurnView {
   cacheCreationTokens: number;
   totalTokens: number;
 
-  ttftMs: number;
-  generationMs: number;
   totalMs: number;
   requests: number;
 
   totalTokPerSec: number;
-  generationTokPerSec: number;
 
   costUsd: number;
   model?: string;
@@ -129,8 +123,6 @@ export interface TurnView {
 
 export function viewOf(t: Turn, nowMs: number): TurnView {
   const totalSec = t.totalDurationMs / 1000;
-  const generationMs = Math.max(0, t.totalDurationMs - t.totalTtftMs);
-  const genSec = generationMs / 1000;
   return {
     outputTokens: t.outputTokens,
     inputTokens: t.inputTokens,
@@ -141,12 +133,9 @@ export function viewOf(t: Turn, nowMs: number): TurnView {
       t.outputTokens +
       t.cacheReadTokens +
       t.cacheCreationTokens,
-    ttftMs: t.firstTtftMs,
-    generationMs,
     totalMs: t.totalDurationMs,
     requests: t.requests,
     totalTokPerSec: totalSec > 0 ? t.outputTokens / totalSec : 0,
-    generationTokPerSec: genSec > 0 ? t.outputTokens / genSec : 0,
     costUsd: t.costUsd,
     model: t.model,
     speed: t.speed,

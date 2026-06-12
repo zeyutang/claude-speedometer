@@ -48,8 +48,6 @@ export class Aggregator extends EventEmitter {
     const turn = this.ensureTurn(promptId, attrs);
     const now = Date.now();
 
-    const seq = num(attrs, "event.sequence");
-    const ttft = num(attrs, "ttft_ms") ?? 0;
     const duration = num(attrs, "duration_ms") ?? 0;
 
     turn.requests += 1;
@@ -58,17 +56,8 @@ export class Aggregator extends EventEmitter {
     turn.cacheReadTokens += num(attrs, "cache_read_tokens") ?? 0;
     turn.cacheCreationTokens += num(attrs, "cache_creation_tokens") ?? 0;
     turn.totalDurationMs += duration;
-    turn.totalTtftMs += ttft;
     turn.costUsd += num(attrs, "cost_usd") ?? 0;
     turn.lastMs = now;
-
-    // The turn's "time to first token" is the first request's ttft.
-    if (seq !== undefined && seq <= turn.firstSeq) {
-      turn.firstSeq = seq;
-      turn.firstTtftMs = ttft;
-    } else if (turn.requests === 1) {
-      turn.firstTtftMs = ttft;
-    }
 
     const model = str(attrs, "model");
     if (model) turn.model = model;
@@ -102,7 +91,6 @@ export class Aggregator extends EventEmitter {
       const now = Date.now();
       t = {
         promptId,
-        firstSeq: Number.POSITIVE_INFINITY,
         startMs: now,
         lastMs: now,
         requests: 0,
@@ -111,8 +99,6 @@ export class Aggregator extends EventEmitter {
         cacheReadTokens: 0,
         cacheCreationTokens: 0,
         totalDurationMs: 0,
-        totalTtftMs: 0,
-        firstTtftMs: 0,
         costUsd: 0,
         sessionId: str(attrs, "session.id"),
         terminalType: str(attrs, "terminal.type"),

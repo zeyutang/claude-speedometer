@@ -3,7 +3,15 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
-## 1.5.0 - 2026-06-11
+## 1.5.2 - 2026-06-11
+
+- Removed the time-to-first-token and generation-time readouts and the
+  `speedBasis` setting. Claude Code's telemetry does not report time to first
+  token, so those figures were always empty or identical to total time. The
+  throughput figure is unchanged: output tokens divided by total request time.
+- Renamed the "Total Time" field to "Total Request Time" for precision.
+
+## 1.5.1 - 2026-06-11
 
 Initial public release.
 
