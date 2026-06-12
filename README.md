@@ -35,8 +35,8 @@ Once installed, the extension needs Claude Code to export telemetry to it:
 
 The bolt shows the **last completed** interaction's tok/s. It updates when a turn finishes, not while it is still running, so the figure is stable. The overlay and the tab break the latest turn into sections:
 
-- **Speed**: output tok/s (output tokens / total request time).
-- **Tokens**: input, output, cache-write, cache-read.
+- **Speed**: output tok/s (output tokens / summed request time).
+- **Tokens**: input, output, cache-write, cache-read. "Output" counts thinking and visible text together; Claude Code's telemetry does not report them separately.
 - **Timing**: total request time and API request count.
 - **Cost & Model**: estimated cost, model, and reasoning effort. **Fast mode** appears only when it is on.
 - **Recent**: the last several interactions at a glance.
@@ -44,9 +44,10 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
 
 A few things to know about the numbers:
 
-- tok/s is `output tokens / total request time`, the sum of each API call's server-measured `duration_ms`. Tool-execution gaps and time you spend typing or queueing are **not** counted.
-- One "interaction" sums all API calls of a single prompt (`prompt.id`), including tool-call steps.
-- Stats are **global** across all Claude Code sessions, not filtered to the current workspace.
+- tok/s is `output tokens / summed request time`, summing each API call's wall-clock `duration_ms` (server time plus network and any retries). Tool-execution gaps and time you spend typing or queueing between requests are **not** counted.
+- Output tokens, and therefore tok/s, include both thinking and visible text. Claude Code reports a single output count, so the two cannot be separated here.
+- One "interaction" sums all API calls of a single prompt (`prompt.id`), including tool-call steps and any sub-agents the prompt spawns.
+- Stats are **global** across all Claude Code sessions and windows, not filtered to the current workspace.
 
 ## Settings
 

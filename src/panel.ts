@@ -95,14 +95,14 @@ export class StatsPanel {
       <div class="hero">
         <span class="hero-num">${fmtTokPerSec(v.totalTokPerSec)}</span>
         <span class="hero-unit">tok/s</span>
-        <span class="muted">output tokens / total request time</span>
+        <span class="muted">output tokens (thinking + text) / summed request time</span>
       </div>
 
       <hr />
       <h3>Tokens</h3>
       ${kv([
-        ["Text Input Tokens", fmtInt(v.inputTokens)],
-        ["Text Output Tokens", fmtInt(v.outputTokens)],
+        ["Input Tokens", fmtInt(v.inputTokens)],
+        ["Output Tokens (thinking + text)", fmtInt(v.outputTokens)],
         ["Cache Write Tokens", fmtInt(v.cacheCreationTokens)],
         ["Cache Read Tokens", fmtInt(v.cacheReadTokens)],
       ])}
@@ -149,7 +149,9 @@ export class StatsPanel {
         <tbody>${recentRows}</tbody>
       </table>
       <p class="muted note">Each row aggregates all API calls (including tool
-      steps) of one prompt. Stats are global across Claude Code sessions, not
+      steps) of one prompt. Output tokens include both thinking and visible text
+      (the API does not separate them), and tok/s is output over summed
+      per-request time. Stats are global across Claude Code sessions, not
       filtered to this workspace.</p>`;
   }
 }

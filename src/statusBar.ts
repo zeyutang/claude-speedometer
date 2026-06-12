@@ -41,11 +41,13 @@ export class SpeedStatusBar {
       : "-";
 
     this.item.text = `$(zap) ${speedStr} tok/s`;
-    // While the stats tab is open, accent the bolt's text/icon instead of a
-    // background fill. VS Code only allows warning/error *backgrounds* for
-    // status-bar items, so we tint the foreground to mark the active state.
-    this.item.color = this.active
-      ? new vscode.ThemeColor("statusBarItem.prominentForeground")
+    // While the stats tab is open, fill the item with the warning background to
+    // mark the active state. VS Code only allows warning/error *backgrounds* for
+    // status-bar items, and it auto-pairs a contrasting foreground, so this stays
+    // legible in both light and dark themes. (A plain foreground tint such as
+    // prominentForeground renders near-white and vanishes on light backgrounds.)
+    this.item.backgroundColor = this.active
+      ? new vscode.ThemeColor("statusBarItem.warningBackground")
       : undefined;
     this.item.tooltip = buildTooltip(this.store);
   }

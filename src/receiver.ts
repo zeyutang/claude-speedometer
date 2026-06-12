@@ -2,6 +2,14 @@ import * as http from "http";
 import { Aggregator } from "./aggregator";
 import { Attrs, readAttributes, readAnyValue } from "./types";
 
+/** OTLP timestamps are nanoseconds since the epoch (string/number) -> epoch ms. */
+function nanoToMs(ns: unknown): number | undefined {
+  if (ns === undefined || ns === null) return undefined;
+  const n = typeof ns === "number" ? ns : Number(ns);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.round(n / 1e6);
+}
+
 /**
  * Minimal OTLP/HTTP (http/json) receiver. Accepts log exports from Claude Code
  * on POST /v1/logs and feeds api_request / user_prompt events to the aggregator.
@@ -70,6 +78,8 @@ export class OtlpReceiver {
           logRecords?: Array<{
             body?: unknown;
             attributes?: unknown;
+            timeUnixNano?: unknown;
+            observedTimeUnixNano?: unknown;
           }>;
         }>;
       }>;
@@ -87,7 +97,10 @@ export class OtlpReceiver {
             (readAnyValue(rec.body) as string | undefined);
           if (!eventName) continue;
 
-          this.agg.handleEvent(eventName, attrs);
+          const eventTimeMs = nanoToMs(
+            rec.timeUnixNano ?? rec.observedTimeUnixNano
+          );
+          this.agg.handleEvent(eventName, attrs, eventTimeMs);
         }
       }
     }

@@ -21,7 +21,7 @@ export interface Turn {
   cacheCreationTokens: number;
 
   // timing (ms)
-  totalDurationMs: number; // sum of duration_ms (server-measured per request)
+  totalDurationMs: number; // sum of per-request duration_ms (wall-clock, incl. retries)
 
   costUsd: number;
 

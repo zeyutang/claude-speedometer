@@ -44,14 +44,14 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   L.push(`**Latest interaction** · ${fmtAgo(v.ageMs)}`);
   L.push("");
   L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/s`);
-  L.push(`output tokens / total request time`);
+  L.push(`output tokens (thinking + text) / summed request time`);
 
   const sections: Section[] = [
     {
       title: "Tokens",
       rows: [
-        ["Text Input", fmtInt(v.inputTokens)],
-        ["Text Output", fmtInt(v.outputTokens)],
+        ["Input", fmtInt(v.inputTokens)],
+        ["Output", fmtInt(v.outputTokens)],
         ["Cache Write", fmtInt(v.cacheCreationTokens)],
         ["Cache Read", fmtInt(v.cacheReadTokens)],
       ],
