@@ -11,6 +11,15 @@ follows [Semantic Versioning](https://semver.org).
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
+## 1.6.1 - 2026-06-13
+
+- Fixed the **Cost** section showing $0.00 for Today, This Week, and This Month
+  (only the current interaction had a value) after upgrading. The daily ledger
+  used to accrue from live events only, so it started empty and ignored existing
+  history. It now recomputes from the retained turns, banking each day's total
+  with a max so it never shrinks as turns age out, and the leader publishes the
+  rebuilt totals immediately on startup instead of only after the next turn.
+
 ## 1.6.0 - 2026-06-13
 
 - Added a **Cost** section (split out from the old "Cost & Model") showing the

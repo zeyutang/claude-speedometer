@@ -108,11 +108,7 @@ export class Aggregator extends EventEmitter {
     turn.cacheReadTokens += num(attrs, "cache_read_tokens") ?? 0;
     turn.cacheCreationTokens += num(attrs, "cache_creation_tokens") ?? 0;
     turn.totalDurationMs += duration;
-    const cost = num(attrs, "cost_usd") ?? 0;
-    turn.costUsd += cost;
-    // Bank this request's cost into its local-day bucket (idempotent: we only
-    // reach here once per request_id within a leader's lifetime).
-    if (cost) this.addDailyCost(ts, cost);
+    turn.costUsd += num(attrs, "cost_usd") ?? 0;
     // Events can arrive out of order within a batch: keep the extremes.
     if (ts > turn.lastMs) turn.lastMs = ts;
     if (ts < turn.startMs) turn.startMs = ts;
@@ -191,9 +187,24 @@ export class Aggregator extends EventEmitter {
     this.settleTimers.set(scope, timer);
   }
 
-  private addDailyCost(eventMs: number, cost: number): void {
-    const key = localDayKey(eventMs);
-    this.dailyCost.set(key, (this.dailyCost.get(key) ?? 0) + cost);
+  /**
+   * Fold the retained turns into the daily ledger, banking each local day's
+   * summed cost. Uses max(banked, sum-of-retained-turns-that-day) so that once a
+   * day's turns start aging out of the retained set, its already-banked total is
+   * preserved rather than shrinking. Recomputing from turns (instead of adding
+   * per event) also self-heals: the ledger fills in immediately from existing
+   * history, e.g. after upgrading from a version that had no ledger.
+   */
+  private bankTurnsIntoLedger(): void {
+    const fromTurns = new Map<string, number>();
+    for (const t of this.turns.values()) {
+      if (!t.costUsd) continue;
+      const key = localDayKey(t.lastMs);
+      fromTurns.set(key, (fromTurns.get(key) ?? 0) + t.costUsd);
+    }
+    for (const [key, sum] of fromTurns) {
+      if (sum > (this.dailyCost.get(key) ?? 0)) this.dailyCost.set(key, sum);
+    }
   }
 
   /** Drop ledger days older than the cost-retention window. */
@@ -246,6 +257,8 @@ export class Aggregator extends EventEmitter {
 
   /** Serialize current state for publishing to the shared store. */
   snapshot(): Snapshot {
+    this.bankTurnsIntoLedger();
+    this.pruneDailyCost();
     return {
       version: 1,
       updatedMs: Date.now(),
@@ -263,6 +276,9 @@ export class Aggregator extends EventEmitter {
     this.displayId = snap.displayId;
     this.runningBySession.clear();
     this.dailyCost = new Map(Object.entries(snap.dailyCost ?? {}));
+    // Seed the ledger from the retained turns too, so an upgrade from a version
+    // without the ledger (or a handover) shows history immediately.
+    this.bankTurnsIntoLedger();
     this.prune();
   }
 

@@ -71,6 +71,9 @@ export class LeaderManager {
     this.agg = agg;
     this.receiver = receiver;
     agg.on("update", () => this.store.write(agg.snapshot()));
+    // Publish once now so the recomputed daily-cost ledger (and the seeded turns)
+    // reach every window immediately, rather than only after the next turn.
+    this.store.write(agg.snapshot());
     this.onRoleChange?.(true);
   }
 
