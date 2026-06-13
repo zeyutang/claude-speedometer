@@ -2,7 +2,7 @@
   "name": "claude-speedometer",
   "displayName": "Claude Speedometer",
   "description": "Indicator showing the token throughput and timing of your Claude Code interactions.",
-  "version": "1.5.5",
+  "version": "1.6.0",
   "publisher": "zeyutang",
   "license": "MIT",
   "repository": {
