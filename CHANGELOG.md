@@ -11,6 +11,21 @@ follows [Semantic Versioning](https://semver.org).
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
+## 1.6.0 - 2026-06-13
+
+- Added a **Cost** section (split out from the old "Cost & Model") showing the
+  estimated spend for the current interaction, today, this week (from Monday),
+  and this month. Totals are summed in local time from a small daily ledger that
+  is kept for ~70 days, so they stay accurate even after older turns are pruned.
+  Model, reasoning effort, and Fast mode now live in their own **Model** section.
+- Interaction times now show the **wall-clock time with a live "x ago" hint**
+  instead of a relative age that froze at the value captured on the last update.
+  The status-bar overlay and the stats tab refresh on their own so the hint
+  stays current.
+- Raised the retained-turn cap from 50 to **1,000** turns. Age-based retention
+  (default 7 days) still applies, so the effective history is whichever limit is
+  reached first.
+
 ## 1.5.5 - 2026-06-13
 
 - The **Effort** row now appears only when the model supports effort

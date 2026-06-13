@@ -2,7 +2,14 @@ import { EventEmitter } from "events";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { Snapshot, Turn, selectLatest, selectRecent } from "./types";
+import {
+  CostWindows,
+  Snapshot,
+  Turn,
+  costWindows,
+  selectLatest,
+  selectRecent,
+} from "./types";
 
 // A stable, user-visible location shared by every VS Code window. (os.tmpdir()
 // can differ between the extension host and a terminal on macOS, so we avoid it.)
@@ -78,6 +85,11 @@ export class SpeedStore extends EventEmitter {
 
   getRecent(limit: number): Turn[] {
     return selectRecent(this.current?.turns ?? [], limit);
+  }
+
+  /** Cost summed over today / this week (from Monday) / this month, in USD. */
+  getCostWindows(nowMs: number): CostWindows {
+    return costWindows(this.current?.dailyCost, nowMs);
   }
 
   private readFile(): Snapshot | undefined {

@@ -9,9 +9,15 @@ import { buildTooltip } from "./tooltip";
  * machine-wide value. Hovering shows the stats overlay; clicking toggles the
  * solid (highlighted) vs hollow (plain) appearance.
  */
+// How often to rebuild the tooltip so its relative "(x ago)" hint stays current
+// between interactions. The tooltip is a static MarkdownString computed at render
+// time, so without this it would freeze at whatever age it had on the last update.
+const REFRESH_MS = 10_000;
+
 export class SpeedStatusBar {
   private item: vscode.StatusBarItem;
   private active = false;
+  private readonly timer: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly store: SpeedStore,
@@ -26,6 +32,7 @@ export class SpeedStatusBar {
     this.render();
     this.item.show();
     this.store.on("update", () => this.render());
+    this.timer = setInterval(() => this.render(), REFRESH_MS);
   }
 
   /** Reflect the stats tab being open (solid) vs closed (hollow). */
@@ -53,6 +60,7 @@ export class SpeedStatusBar {
   }
 
   dispose(): void {
+    clearInterval(this.timer);
     this.item.dispose();
   }
 }

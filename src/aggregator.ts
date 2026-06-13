@@ -3,6 +3,7 @@ import {
   Attrs,
   Snapshot,
   Turn,
+  localDayKey,
   num,
   selectLatest,
   selectRecent,
@@ -10,8 +11,15 @@ import {
 } from "./types";
 import { resolveWorkspace } from "./workspace";
 
-const MAX_TURNS = 50;
+// Cap on retained turns. The whole set is serialized into state.json on every
+// update and re-parsed by each window, so this bounds that file's size; ~1k
+// small turn records is well under a megabyte. Age-based retention (retentionDays)
+// still applies, so the effective history is whichever limit is reached first.
+const MAX_TURNS = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// How many days of the daily-cost ledger to keep. Covers This Month (up to 31
+// days) with headroom; the ledger is a handful of bytes per day regardless.
+const COST_LEDGER_DAYS = 70;
 
 /** Parse an ISO-8601 timestamp to epoch ms, or undefined if unparseable. */
 function isoMs(v: string | undefined): number | undefined {
@@ -50,6 +58,10 @@ export class Aggregator extends EventEmitter {
   // redelivered export never double-counts. In-memory and leader-lifetime only
   // (not serialized): seeded turns keep their baked-in counts after a handover.
   private seenRequests = new Map<string, Set<string>>();
+  // Running cost per local calendar day ("YYYY-MM-DD"). Banked as events arrive
+  // (deduped via seenRequests) and persisted, so day/week/month totals survive
+  // turn pruning.
+  private dailyCost = new Map<string, number>();
 
   constructor(
     private readonly retentionDays = 7,
@@ -96,7 +108,11 @@ export class Aggregator extends EventEmitter {
     turn.cacheReadTokens += num(attrs, "cache_read_tokens") ?? 0;
     turn.cacheCreationTokens += num(attrs, "cache_creation_tokens") ?? 0;
     turn.totalDurationMs += duration;
-    turn.costUsd += num(attrs, "cost_usd") ?? 0;
+    const cost = num(attrs, "cost_usd") ?? 0;
+    turn.costUsd += cost;
+    // Bank this request's cost into its local-day bucket (idempotent: we only
+    // reach here once per request_id within a leader's lifetime).
+    if (cost) this.addDailyCost(ts, cost);
     // Events can arrive out of order within a batch: keep the extremes.
     if (ts > turn.lastMs) turn.lastMs = ts;
     if (ts < turn.startMs) turn.startMs = ts;
@@ -175,7 +191,21 @@ export class Aggregator extends EventEmitter {
     this.settleTimers.set(scope, timer);
   }
 
+  private addDailyCost(eventMs: number, cost: number): void {
+    const key = localDayKey(eventMs);
+    this.dailyCost.set(key, (this.dailyCost.get(key) ?? 0) + cost);
+  }
+
+  /** Drop ledger days older than the cost-retention window. */
+  private pruneDailyCost(): void {
+    const cutoffKey = localDayKey(Date.now() - COST_LEDGER_DAYS * DAY_MS);
+    for (const key of this.dailyCost.keys()) {
+      if (key < cutoffKey) this.dailyCost.delete(key);
+    }
+  }
+
   private prune(): void {
+    this.pruneDailyCost();
     const cutoff = Date.now() - this.retentionDays * DAY_MS;
     const running = new Set(this.runningBySession.values());
     for (const [id, t] of this.turns) {
@@ -221,6 +251,7 @@ export class Aggregator extends EventEmitter {
       updatedMs: Date.now(),
       displayId: this.displayId,
       turns: [...this.turns.values()],
+      dailyCost: Object.fromEntries(this.dailyCost),
     };
   }
 
@@ -231,6 +262,7 @@ export class Aggregator extends EventEmitter {
     for (const t of snap.turns) this.turns.set(t.promptId, t);
     this.displayId = snap.displayId;
     this.runningBySession.clear();
+    this.dailyCost = new Map(Object.entries(snap.dailyCost ?? {}));
     this.prune();
   }
 

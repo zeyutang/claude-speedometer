@@ -79,6 +79,56 @@ export interface Snapshot {
   updatedMs: number;
   displayId?: string;
   turns: Turn[];
+  // Running cost (USD) per local calendar day, keyed "YYYY-MM-DD". Banked as
+  // events arrive and kept beyond the per-turn retention, so Today/Week/Month
+  // totals stay accurate even after old turns are pruned.
+  dailyCost?: Record<string, number>;
+}
+
+/** Local-time calendar-day key ("YYYY-MM-DD") for an epoch-ms instant. */
+export function localDayKey(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Cost (USD) summed over the day, the week (from Monday), and the month. */
+export interface CostWindows {
+  today: number;
+  week: number;
+  month: number;
+}
+
+/** Sum a daily-cost ledger into Today / This Week (Monday-start) / This Month,
+ *  all in local time. "YYYY-MM-DD" keys order lexically, so range checks are
+ *  plain string comparisons. */
+export function costWindows(
+  daily: Record<string, number> | undefined,
+  nowMs: number
+): CostWindows {
+  const out: CostWindows = { today: 0, week: 0, month: 0 };
+  if (!daily) return out;
+  const now = new Date(nowMs);
+  const todayKey = localDayKey(nowMs);
+  const dow = (now.getDay() + 6) % 7; // days since Monday (0 = Monday)
+  const monday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - dow
+  );
+  const mondayKey = localDayKey(monday.getTime());
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-01`;
+  for (const [key, cost] of Object.entries(daily)) {
+    if (key === todayKey) out.today += cost;
+    if (key >= mondayKey) out.week += cost;
+    if (key >= monthKey) out.month += cost;
+  }
+  return out;
 }
 
 /** The turn to display: the one whose prompt.id is the current display id. */
@@ -119,6 +169,7 @@ export interface TurnView {
   terminalType?: string;
   workspace?: string;
   ageMs: number;
+  lastMs: number; // wall-clock ms of the most recent event (for absolute time)
 }
 
 export function viewOf(t: Turn, nowMs: number): TurnView {
@@ -144,5 +195,6 @@ export function viewOf(t: Turn, nowMs: number): TurnView {
     terminalType: t.terminalType,
     workspace: t.workspace,
     ageMs: Math.max(0, nowMs - t.lastMs),
+    lastMs: t.lastMs,
   };
 }

@@ -40,3 +40,37 @@ export function fmtAgo(ms: number): string {
   const h = Math.round(m / 60);
   return `${h}h ago`;
 }
+
+/** Absolute wall-clock time of an event: time-of-day (with seconds) for today,
+ *  "Jun 12, 2:30 PM" for earlier days. Unlike a relative "x ago", this never
+ *  goes stale between renders. */
+export function fmtClock(ms: number, nowMs: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "-";
+  const d = new Date(ms);
+  const now = new Date(nowMs);
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return d.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const time = d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${date}, ${time}`;
+}
+
+/** Absolute time plus a relative hint: "2:34:05 PM (5s ago)". The absolute part
+ *  is the source of truth; the relative part stays current only if the caller
+ *  re-renders periodically (see the refresh timers in the status bar / panel). */
+export function fmtWhen(ms: number, nowMs: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "-";
+  return `${fmtClock(ms, nowMs)} (${fmtAgo(Math.max(0, nowMs - ms))})`;
+}

@@ -38,7 +38,8 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
 - **Speed**: output tok/s (output tokens / summed request time).
 - **Tokens**: input, output, cache-write, cache-read. "Output" counts thinking and visible text together; Claude Code's telemetry does not report them separately.
 - **Timing**: total request time and API request count.
-- **Cost & Model**: estimated cost and model. **Reasoning effort** appears only when the model supports it; **Fast mode** appears only when it is on.
+- **Cost (estimated)**: spend for the current interaction, today, this week (from Monday), and this month, summed in local time. Day/week/month totals accrue from when telemetry was enabled and survive turn pruning.
+- **Model**: model, plus **reasoning effort** (only when the model supports it) and **Fast mode** (only when it is on).
 - **Recent**: the last several interactions at a glance.
 - **Context** (tab only): the session id and the full workspace path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
 
@@ -48,6 +49,7 @@ A few things to know about the numbers:
 - Output tokens, and therefore tok/s, include both thinking and visible text. Claude Code reports a single output count, so the two cannot be separated here.
 - One "interaction" sums all API calls of a single prompt (`prompt.id`), including tool-call steps and any sub-agents the prompt spawns.
 - Stats are **global** across all Claude Code sessions and windows, not filtered to the current workspace.
+- Interaction times show the wall-clock time plus a live "x ago" hint that refreshes on its own, so it stays accurate instead of freezing at the value from the last interaction.
 
 ## Settings
 
@@ -62,7 +64,7 @@ A few things to know about the numbers:
 
 VS Code extensions can't read Claude Code's internal timing directly, so the extension runs a tiny OTLP/HTTP receiver on `localhost:4318` (loopback only), and Claude Code is configured to export its telemetry there. Each `claude_code.api_request` event carries the token, timing, and cost fields shown above.
 
-It is **one machine-wide speedometer**: each VS Code window tries to bind the port; the one that succeeds runs the receiver and publishes to a shared file (`~/.claude-speedometer/state.json`, the last 50 turns / 7 days, safe to delete), and every other window mirrors that file. When the leader window closes, a follower takes over within a couple of seconds.
+It is **one machine-wide speedometer**: each VS Code window tries to bind the port; the one that succeeds runs the receiver and publishes to a shared file (`~/.claude-speedometer/state.json`, the last 1,000 turns / 7 days plus ~70 days of daily cost totals, safe to delete), and every other window mirrors that file. When the leader window closes, a follower takes over within a couple of seconds.
 
 ## Development
 

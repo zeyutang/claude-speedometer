@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 import { SpeedStore } from "./store";
 import {
-  fmtAgo,
+  fmtClock,
   fmtCost,
   fmtEffort,
   fmtInt,
   fmtTime,
   fmtTokPerSec,
+  fmtWhen,
   isFastModeOn,
 } from "./format";
 import { viewOf } from "./types";
@@ -39,9 +40,10 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   }
 
   const v = viewOf(latest, now);
+  const cw = store.getCostWindows(now);
 
   const L: string[] = [];
-  L.push(`**Latest interaction** · ${fmtAgo(v.ageMs)}`);
+  L.push(`**Latest interaction** · ${fmtWhen(v.lastMs, now)}`);
   L.push("");
   L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/s`);
   L.push(`output tokens (thinking + text) / summed request time`);
@@ -64,9 +66,17 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
       ],
     },
     {
-      title: "Cost & Model",
+      title: "Cost (estimated)",
       rows: [
-        ["Estimated Cost", fmtCost(v.costUsd)],
+        ["Current Interaction", fmtCost(v.costUsd)],
+        ["Today", fmtCost(cw.today)],
+        ["This Week", fmtCost(cw.week)],
+        ["This Month", fmtCost(cw.month)],
+      ],
+    },
+    {
+      title: "Model",
+      rows: [
         ["Model", v.model ?? "-"],
         // Effort row appears only when the model reports an effort setting.
         ...(v.effort ? [["Effort", fmtEffort(v.effort)] as Row] : []),
@@ -82,7 +92,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   const recentHeaders = ["When", "Output", "tok/s", "Total"];
   const recentMin = [0, OUTPUT_MIN_WIDTH, 0, 0];
   const recentRows = recent.map((r) => [
-    fmtAgo(r.ageMs),
+    fmtClock(r.lastMs, now),
     fmtInt(r.outputTokens),
     fmtTokPerSec(r.totalTokPerSec),
     fmtTime(r.totalMs),

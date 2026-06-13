@@ -1,22 +1,29 @@
 import * as vscode from "vscode";
 import { SpeedStore } from "./store";
 import {
-  fmtAgo,
+  fmtClock,
   fmtCost,
   fmtEffort,
   fmtInt,
   fmtTime,
   fmtTokPerSec,
+  fmtWhen,
   isFastModeOn,
 } from "./format";
-import { Turn, TurnView, viewOf } from "./types";
+import { CostWindows, Turn, TurnView, viewOf } from "./types";
 
 /**
  * The stats tab opened by clicking the bolt. Opens in the active editor group,
  * reuses the existing tab if already open, and toggles closed on a second click.
  */
+// While the panel is open, re-render on this cadence so the header's relative
+// "(x ago)" hint advances; scripts are disabled in the webview, so the extension
+// drives the refresh rather than client-side JS.
+const REFRESH_MS = 10_000;
+
 export class StatsPanel {
   private panel: vscode.WebviewPanel | undefined;
+  private timer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     private readonly store: SpeedStore,
@@ -41,23 +48,36 @@ export class StatsPanel {
     );
     this.panel.webview.html = this.render();
     this.onVisibilityChange(true);
+    this.timer = setInterval(() => {
+      if (this.panel) this.panel.webview.html = this.render();
+    }, REFRESH_MS);
     this.panel.onDidDispose(() => {
+      this.stopTimer();
       this.panel = undefined;
       this.onVisibilityChange(false);
     });
   }
 
   dispose(): void {
+    this.stopTimer();
     this.panel?.dispose();
     this.panel = undefined;
+  }
+
+  private stopTimer(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = undefined;
+    }
   }
 
   private render(): string {
     const now = Date.now();
     const latest = this.store.getLatest();
     const recent = this.store.getRecent(8);
+    const cost = this.store.getCostWindows(now);
     const body = latest
-      ? this.renderTurn(viewOf(latest, now), recent, now)
+      ? this.renderTurn(viewOf(latest, now), recent, now, cost)
       : this.renderEmpty();
     return wrapHtml(body);
   }
@@ -73,12 +93,17 @@ export class StatsPanel {
       </div>`;
   }
 
-  private renderTurn(v: TurnView, recent: Turn[], now: number): string {
+  private renderTurn(
+    v: TurnView,
+    recent: Turn[],
+    now: number,
+    cost: CostWindows
+  ): string {
     const recentRows = recent
       .map((t) => {
         const rv = viewOf(t, now);
         return `<tr>
-          <td>${fmtAgo(rv.ageMs)}</td>
+          <td>${fmtClock(rv.lastMs, now)}</td>
           <td class="num">${fmtInt(rv.outputTokens)}</td>
           <td class="num">${fmtTokPerSec(rv.totalTokPerSec)}</td>
           <td class="num">${fmtTime(rv.totalMs)}</td>
@@ -89,7 +114,7 @@ export class StatsPanel {
     return `
       <div class="head">
         <span class="title">Latest interaction</span>
-        <span class="muted">${fmtAgo(v.ageMs)}</span>
+        <span class="muted">${fmtWhen(v.lastMs, now)}</span>
       </div>
 
       <div class="hero">
@@ -115,9 +140,17 @@ export class StatsPanel {
       ])}
 
       <hr />
-      <h3>Cost &amp; Model</h3>
+      <h3>Cost (estimated)</h3>
       ${kv([
-        ["Estimated Cost", fmtCost(v.costUsd)],
+        ["Current Interaction", fmtCost(v.costUsd)],
+        ["Today", fmtCost(cost.today)],
+        ["This Week", fmtCost(cost.week)],
+        ["This Month", fmtCost(cost.month)],
+      ])}
+
+      <hr />
+      <h3>Model</h3>
+      ${kv([
         ["Model", v.model ?? "-"],
         // Effort row appears only when the model reports an effort setting;
         // models that don't support effort configuration omit the attribute.
@@ -156,7 +189,9 @@ export class StatsPanel {
       (the API does not separate them), and tok/s is output over summed
       per-request time. Stats are global across all Claude Code sessions (each
       tracked separately, so concurrent sessions don't cut each other's turns
-      short), not filtered to this VS Code window.</p>`;
+      short), not filtered to this VS Code window. Cost totals (Today, This Week
+      from Monday, This Month) are estimates summed in local time and accrue only
+      from when telemetry was enabled.</p>`;
   }
 }
 
