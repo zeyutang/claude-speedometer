@@ -95,14 +95,13 @@ export class StatsPanel {
       <div class="hero">
         <span class="hero-num">${fmtTokPerSec(v.totalTokPerSec)}</span>
         <span class="hero-unit">tok/s</span>
-        <span class="muted">output tokens (thinking + text) / summed request time</span>
       </div>
 
       <hr />
       <h3>Tokens</h3>
       ${kv([
         ["Input Tokens", fmtInt(v.inputTokens)],
-        ["Output Tokens (thinking + text)", fmtInt(v.outputTokens)],
+        ["Output Tokens (Thinking + Text)", fmtInt(v.outputTokens)],
         ["Cache Write Tokens", fmtInt(v.cacheCreationTokens)],
         ["Cache Read Tokens", fmtInt(v.cacheReadTokens)],
       ])}
@@ -111,7 +110,7 @@ export class StatsPanel {
       <h3>Timing</h3>
       ${kv([
         ["Total Request Time", fmtTime(v.totalMs)],
-        ["Output Tokens / s", `${fmtTokPerSec(v.totalTokPerSec)} tok/s`],
+        ["Output Tokens / Second", `${fmtTokPerSec(v.totalTokPerSec)} tok/s`],
         ["API Requests", String(v.requests)],
       ])}
 
@@ -120,10 +119,14 @@ export class StatsPanel {
       ${kv([
         ["Estimated Cost", fmtCost(v.costUsd)],
         ["Model", v.model ?? "-"],
-        ["Effort", fmtEffort(v.effort)],
+        // Effort row appears only when the model reports an effort setting;
+        // models that don't support effort configuration omit the attribute.
+        ...(v.effort
+          ? [["Effort", fmtEffort(v.effort)] as [string, string]]
+          : []),
         // Fast mode row appears only when the model supports it and it is on.
         ...(isFastModeOn(v.speed)
-          ? [["Fast mode", "On"] as [string, string]]
+          ? [["Fast Mode", "On"] as [string, string]]
           : []),
       ])}
 
@@ -151,8 +154,9 @@ export class StatsPanel {
       <p class="muted note">Each row aggregates all API calls (including tool
       steps) of one prompt. Output tokens include both thinking and visible text
       (the API does not separate them), and tok/s is output over summed
-      per-request time. Stats are global across Claude Code sessions, not
-      filtered to this workspace.</p>`;
+      per-request time. Stats are global across all Claude Code sessions (each
+      tracked separately, so concurrent sessions don't cut each other's turns
+      short), not filtered to this VS Code window.</p>`;
   }
 }
 

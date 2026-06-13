@@ -3,6 +3,24 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
+## What's next
+
+- **Per-window stats:** an option to scope the speedometer to the current
+  window's workspace instead of the machine-wide latest interaction.
+- **Richer timing (needs Claude Code's tracing beta):** time to first token, a
+  decode-only speed, exact per-turn boundaries, and excluding failed or retried
+  calls and tool time from the throughput.
+
+## 1.5.5 - 2026-06-13
+
+- The **Effort** row now appears only when the model supports effort
+  configuration, instead of always showing a placeholder. It is read from
+  Claude Code's telemetry, so models that do not report an effort setting omit
+  the row, the same way Fast mode shows only when it is on.
+- Tidied the stats tab: dropped the throughput formula from under the headline
+  number (it is still in the footnote and the hover overlay) and clarified the
+  token and timing labels.
+
 ## 1.5.4 - 2026-06-12
 
 - Fixed the active-state indicator washing out in light themes. When the stats

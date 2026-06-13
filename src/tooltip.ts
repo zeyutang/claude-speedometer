@@ -68,7 +68,8 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
       rows: [
         ["Estimated Cost", fmtCost(v.costUsd)],
         ["Model", v.model ?? "-"],
-        ["Effort", fmtEffort(v.effort)],
+        // Effort row appears only when the model reports an effort setting.
+        ...(v.effort ? [["Effort", fmtEffort(v.effort)] as Row] : []),
         // Fast mode row appears only when the model supports it and it is on.
         ...(isFastModeOn(v.speed) ? [["Fast mode", "On"] as Row] : []),
       ],

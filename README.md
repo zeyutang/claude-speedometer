@@ -2,7 +2,7 @@
 
 A VS Code status-bar indicator showing the **token throughput and timing of your latest Claude Code interaction**.
 
-The bolt sits in the right-hand status-bar cluster: `↯ 68.20 tok/s`, and updates after every interaction. **Hover** it for a quick stats overlay; **click** it to open a full stats tab (click again to close).
+The bolt sits in the right-hand status-bar cluster: `↯ 70.18 tok/s`, and updates after every interaction. **Hover** it for a quick stats overlay; **click** it to open a full stats tab (click again to close).
 
 ## What it looks like
 
@@ -38,7 +38,7 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
 - **Speed**: output tok/s (output tokens / summed request time).
 - **Tokens**: input, output, cache-write, cache-read. "Output" counts thinking and visible text together; Claude Code's telemetry does not report them separately.
 - **Timing**: total request time and API request count.
-- **Cost & Model**: estimated cost, model, and reasoning effort. **Fast mode** appears only when it is on.
+- **Cost & Model**: estimated cost and model. **Reasoning effort** appears only when the model supports it; **Fast mode** appears only when it is on.
 - **Recent**: the last several interactions at a glance.
 - **Context** (tab only): the session id and the full workspace path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
 
