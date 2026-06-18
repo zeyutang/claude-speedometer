@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { SpeedStore } from "./store";
-import { fmtTokPerSec } from "./format";
+import { fmtTokPerSecFixed } from "./format";
 import { viewOf } from "./types";
 import { buildTooltip } from "./tooltip";
 
@@ -43,9 +43,9 @@ export class SpeedStatusBar {
 
   private render(): void {
     const turn = this.store.getLatest();
-    const speedStr = turn
-      ? fmtTokPerSec(viewOf(turn, Date.now()).totalTokPerSec)
-      : "-";
+    const speedStr = fmtTokPerSecFixed(
+      turn ? viewOf(turn, Date.now()).totalTokPerSec : undefined
+    );
 
     this.item.text = `$(zap) ${speedStr} tok/s`;
     // While the stats tab is open, fill the item with the warning background to

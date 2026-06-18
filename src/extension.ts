@@ -69,7 +69,7 @@ function readConfig(): TelemetryEnv & {
   return {
     port: c.get<number>("port", 4318),
     exportIntervalMs: c.get<number>("exportIntervalMs", 2000),
-    statusBarPriority: c.get<number>("statusBarPriority", 10000),
+    statusBarPriority: c.get<number>("statusBarPriority", -Number.MAX_SAFE_INTEGER),
     retentionDays: c.get<number>("retentionDays", 7),
   };
 }

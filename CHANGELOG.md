@@ -5,15 +5,26 @@ follows [Semantic Versioning](https://semver.org).
 
 ## What's next
 
-- **Per-window stats:** an option to scope the speedometer to the current
+- Per-window stats: an option to scope the speedometer to the current
   window's workspace instead of the machine-wide latest interaction.
-- **Richer timing (needs Claude Code's tracing beta):** time to first token, a
+- Richer timing (needs Claude Code's tracing beta): time to first token, a
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
+## 1.6.2 - 2026-06-18
+
+- Moved the status-bar bolt to the far right, immediately left of the
+  notification bell (or rightmost when the bell is hidden). The default
+  `statusBarPriority` is now `-Number.MAX_SAFE_INTEGER`; raise it to move the
+  bolt further left.
+- Gave the bolt a fixed width so it no longer jitters as the speed changes:
+  tok/s now shows one decimal with the integer part padded to three digits.
+  Values of 1,000 tok/s and above gain a thousands separator and widen the
+  item.
+
 ## 1.6.1 - 2026-06-13
 
-- Fixed the **Cost** section showing $0.00 for Today, This Week, and This Month
+- Fixed the Cost section showing $0.00 for Today, This Week, and This Month
   (only the current interaction had a value) after upgrading. The daily ledger
   used to accrue from live events only, so it started empty and ignored existing
   history. It now recomputes from the retained turns, banking each day's total
@@ -22,22 +33,22 @@ follows [Semantic Versioning](https://semver.org).
 
 ## 1.6.0 - 2026-06-13
 
-- Added a **Cost** section (split out from the old "Cost & Model") showing the
+- Added a Cost section (split out from the old "Cost & Model") showing the
   estimated spend for the current interaction, today, this week (from Monday),
   and this month. Totals are summed in local time from a small daily ledger that
   is kept for ~70 days, so they stay accurate even after older turns are pruned.
-  Model, reasoning effort, and Fast mode now live in their own **Model** section.
-- Interaction times now show the **wall-clock time with a live "x ago" hint**
+  Model, reasoning effort, and Fast mode now live in their own Model section.
+- Interaction times now show the wall-clock time with a live "x ago" hint
   instead of a relative age that froze at the value captured on the last update.
   The status-bar overlay and the stats tab refresh on their own so the hint
   stays current.
-- Raised the retained-turn cap from 50 to **1,000** turns. Age-based retention
+- Raised the retained-turn cap from 50 to 1,000 turns. Age-based retention
   (default 7 days) still applies, so the effective history is whichever limit is
   reached first.
 
 ## 1.5.5 - 2026-06-13
 
-- The **Effort** row now appears only when the model supports effort
+- The Effort row now appears only when the model supports effort
   configuration, instead of always showing a placeholder. It is read from
   Claude Code's telemetry, so models that do not report an effort setting omit
   the row, the same way Fast mode shows only when it is on.

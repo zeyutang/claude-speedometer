@@ -2,13 +2,13 @@
 
 A VS Code status-bar indicator showing the **token throughput and timing of your latest Claude Code interaction**.
 
-The bolt sits in the right-hand status-bar cluster: `↯ 70.18 tok/s`, and updates after every interaction. **Hover** it for a quick stats overlay; **click** it to open a full stats tab (click again to close).
+The bolt sits at the far right of the status bar, immediately left of the notification bell: `↯ 70.2 tok/s`, and updates after every interaction. **Hover** it for a quick stats overlay; **click** it to open a full stats tab (click again to close).
 
 ## What it looks like
 
 | ![Hover overlay showing the full stats breakdown](tooltip.png) | ![Stats tab with the full per-interaction breakdown](panel.png) |
-| :---: | :---: |
-| *Hover the bolt for a quick overlay* | *Click it for the full stats tab* |
+| :------------------------------------------------------------: | :-------------------------------------------------------------: |
+|              _Hover the bolt for a quick overlay_              |                _Click it for the full stats tab_                |
 
 ## Setup
 
@@ -53,12 +53,12 @@ A few things to know about the numbers:
 
 ## Settings
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `claudeSpeedometer.port` | `4318` | Port the receiver listens on (must match the OTLP endpoint). |
-| `claudeSpeedometer.exportIntervalMs` | `2000` | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive. |
-| `claudeSpeedometer.statusBarPriority` | `10000` | Higher = further left within the right cluster. |
-| `claudeSpeedometer.retentionDays` | `7` | Discard interactions older than this many days. |
+| Setting                               | Default                    | Meaning                                                                                                                                      |
+| ------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claudeSpeedometer.port`              | `4318`                     | Port the receiver listens on (must match the OTLP endpoint).                                                                                 |
+| `claudeSpeedometer.exportIntervalMs`  | `2000`                     | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive.                                                             |
+| `claudeSpeedometer.statusBarPriority` | `-Number.MAX_SAFE_INTEGER` | Position in the right cluster. Higher = further left; the default pins the bolt at the far right, immediately left of the notification bell. |
+| `claudeSpeedometer.retentionDays`     | `7`                        | Discard interactions older than this many days.                                                                                              |
 
 ## How it works
 

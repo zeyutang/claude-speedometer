@@ -6,6 +6,31 @@ export function fmtTokPerSec(n: number): string {
   return n.toFixed(2);
 }
 
+// Figure space (U+2007): a whitespace character that, in the proportional fonts
+// VS Code uses for the status bar, is exactly as wide as a digit (and, unlike an
+// ASCII space, is never collapsed by the renderer). Padding with it aligns digit
+// columns pixel-for-pixel.
+const FIGURE_SPACE = "\u2007";
+
+/**
+ * Status-bar variant of {@link fmtTokPerSec}: one decimal place, with the integer
+ * part reserved to three digits using figure spaces so the rendered width stays
+ * constant for any value below 1000 ("5.0" and "999.9" occupy the same space).
+ * This keeps the status-bar item from jittering as the digit count changes; values
+ * >= 1000 tok/s gain a thousands separator and simply widen the item, which is rare.
+ * `undefined` (no interaction yet) renders as a right-aligned "-".
+ */
+export function fmtTokPerSecFixed(n: number | undefined): string {
+  const s =
+    n !== undefined && Number.isFinite(n)
+      ? n.toLocaleString("en-US", {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })
+      : "-";
+  return s.padStart(5, FIGURE_SPACE); // "999.9", the widest padded form, is 5 chars
+}
+
 /** ms -> "812 ms" or "15.1 s". */
 export function fmtTime(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return "-";
