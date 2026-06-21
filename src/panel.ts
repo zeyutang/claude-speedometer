@@ -121,6 +121,7 @@ export class StatsPanel {
         <span class="hero-num">${fmtTokPerSec(v.totalTokPerSec)}</span>
         <span class="hero-unit">tok/s</span>
       </div>
+      <div class="hero-sub">Output Tokens (Thinking + Text) / Total Request Time</div>
 
       <hr />
       <h3>Tokens</h3>
@@ -252,6 +253,7 @@ function wrapHtml(body: string): string {
   .hero { margin: 12px 0 2px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
   .hero-num { font-size: 34px; font-weight: 700; line-height: 1; }
   .hero-unit { font-size: 14px; color: var(--vscode-descriptionForeground); }
+  .hero-sub { font-size: 12px; color: var(--vscode-descriptionForeground); margin: 0 0 2px; }
   .kv { display: grid; grid-template-columns: 1fr auto; row-gap: 5px; column-gap: 16px; }
   .kv .k { color: var(--vscode-descriptionForeground); }
   .kv .v { text-align: right; font-variant-numeric: tabular-nums; }

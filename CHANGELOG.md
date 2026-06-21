@@ -11,6 +11,14 @@ follows [Semantic Versioning](https://semver.org).
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
+## 1.6.3 - 2026-06-21
+
+- Made the hover overlay interactive: the cursor can now move into the popup
+  (it lingers there instead of vanishing when you leave the bolt), and the
+  overlay gained quick links to open the stats tab and configure telemetry.
+- Added the throughput definition under the headline number in the stats tab,
+  "Output Tokens (Thinking + Text) / Total Request Time", matching the hover.
+
 ## 1.6.2 - 2026-06-18
 
 - Moved the status-bar bolt to the far right, immediately left of the

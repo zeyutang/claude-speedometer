@@ -29,6 +29,14 @@ const OUTPUT_MIN_WIDTH = 13; // room for up to 1,000,000,000 (10^9 with commas)
  */
 export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
+  // A trusted MarkdownString that carries interactive command links makes VS Code
+  // render the status-bar hover as an interactive popup: the cursor can move into
+  // it and it lingers, instead of a passive tooltip that vanishes on mouse-out.
+  // (The status-bar item also carries a `command`, which the hover requires to
+  // fire; see microsoft/vscode#75909.) Without interactive content, no amount of
+  // trust makes the hover sticky, so the action row near the end is what enables it.
+  md.isTrusted = true;
+  md.supportThemeIcons = true;
   const now = Date.now();
 
   const latest = store.getLatest();
@@ -46,7 +54,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   L.push(`**Latest interaction** · ${fmtWhen(v.lastMs, now)}`);
   L.push("");
   L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/s`);
-  L.push(`output tokens (thinking + text) / summed request time`);
+  L.push(`Output Tokens (Thinking + Text) / Total Request Time`);
 
   const sections: Section[] = [
     {
@@ -133,6 +141,15 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
         "\n```"
     );
   }
+
+  // Action row of command links. Beyond being useful shortcuts, these interactive
+  // elements are what make the hover sticky (see the isTrusted note at the top).
+  L.push("", "---", "");
+  L.push(
+    `[$(graph) Open stats tab](command:claudeSpeedometer.togglePanel)` +
+      ` · ` +
+      `[$(gear) Configure telemetry](command:claudeSpeedometer.configureTelemetry)`
+  );
 
   md.appendMarkdown(L.join("\n"));
   return md;
