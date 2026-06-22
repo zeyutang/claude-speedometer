@@ -38,7 +38,7 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
 - **Speed**: output tok/s (output tokens / total request time).
 - **Tokens**: input, output, cache-write, cache-read. "Output" counts thinking and visible text together; Claude Code's telemetry does not report them separately.
 - **Timing**: total request time and API request count.
-- **Cost (estimated)**: spend for the current interaction, today, this week (from Monday), and this month, summed in local time. Day/week/month totals accrue from when telemetry was enabled and survive turn pruning.
+- **Cost (estimated)**: spend for the current interaction, today, this week (from Monday), and this month. Day/week/month windows are bucketed by **UTC** calendar day; the totals accrue from when telemetry was enabled and survive turn pruning.
 - **Model**: model, plus **reasoning effort** (only when the model supports it) and **Fast mode** (only when it is on).
 - **Recent**: the last several interactions at a glance.
 - **Context** (tab only): the session id and the full workspace path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
@@ -49,7 +49,7 @@ A few things to know about the numbers:
 - Output tokens, and therefore tok/s, include both thinking and visible text. Claude Code reports a single output count, so the two cannot be separated here.
 - One "interaction" sums all API calls of a single prompt (`prompt.id`), including tool-call steps and any sub-agents the prompt spawns.
 - Stats are **global** across all Claude Code sessions and windows, not filtered to the current workspace.
-- Interaction times show the wall-clock time plus a live "x ago" hint that refreshes on its own, so it stays accurate instead of freezing at the value from the last interaction.
+- Interaction times show the wall-clock time **in your local timezone** plus a live "x ago" hint that refreshes on its own, so it stays accurate instead of freezing at the value from the last interaction.
 
 ## Settings
 

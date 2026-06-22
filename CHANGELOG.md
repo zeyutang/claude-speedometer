@@ -11,6 +11,10 @@ follows [Semantic Versioning](https://semver.org).
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
+## 1.6.4 - 2026-06-21
+
+- UTC time for cost aggregatation
+
 ## 1.6.3 - 2026-06-21
 
 - Made the hover overlay interactive: the cursor can now move into the popup

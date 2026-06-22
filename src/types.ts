@@ -79,18 +79,18 @@ export interface Snapshot {
   updatedMs: number;
   displayId?: string;
   turns: Turn[];
-  // Running cost (USD) per local calendar day, keyed "YYYY-MM-DD". Banked as
+  // Running cost (USD) per UTC calendar day, keyed "YYYY-MM-DD". Banked as
   // events arrive and kept beyond the per-turn retention, so Today/Week/Month
   // totals stay accurate even after old turns are pruned.
   dailyCost?: Record<string, number>;
 }
 
-/** Local-time calendar-day key ("YYYY-MM-DD") for an epoch-ms instant. */
-export function localDayKey(ms: number): string {
+/** UTC calendar-day key ("YYYY-MM-DD") for an epoch-ms instant. */
+export function utcDayKey(ms: number): string {
   const d = new Date(ms);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -102,8 +102,8 @@ export interface CostWindows {
 }
 
 /** Sum a daily-cost ledger into Today / This Week (Monday-start) / This Month,
- *  all in local time. "YYYY-MM-DD" keys order lexically, so range checks are
- *  plain string comparisons. */
+ *  all in UTC. "YYYY-MM-DD" keys order lexically, so range checks are plain
+ *  string comparisons. */
 export function costWindows(
   daily: Record<string, number> | undefined,
   nowMs: number
@@ -111,18 +111,17 @@ export function costWindows(
   const out: CostWindows = { today: 0, week: 0, month: 0 };
   if (!daily) return out;
   const now = new Date(nowMs);
-  const todayKey = localDayKey(nowMs);
-  const dow = (now.getDay() + 6) % 7; // days since Monday (0 = Monday)
-  const monday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() - dow
+  const todayKey = utcDayKey(nowMs);
+  const dow = (now.getUTCDay() + 6) % 7; // days since Monday (0 = Monday)
+  const mondayMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - dow
   );
-  const mondayKey = localDayKey(monday.getTime());
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}-01`;
+  const mondayKey = utcDayKey(mondayMs);
+  const monthKey = `${now.getUTCFullYear()}-${String(
+    now.getUTCMonth() + 1
+  ).padStart(2, "0")}-01`;
   for (const [key, cost] of Object.entries(daily)) {
     if (key === todayKey) out.today += cost;
     if (key >= mondayKey) out.week += cost;

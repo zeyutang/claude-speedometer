@@ -3,11 +3,11 @@ import {
   Attrs,
   Snapshot,
   Turn,
-  localDayKey,
   num,
   selectLatest,
   selectRecent,
   str,
+  utcDayKey,
 } from "./types";
 import { resolveWorkspace } from "./workspace";
 
@@ -58,7 +58,7 @@ export class Aggregator extends EventEmitter {
   // redelivered export never double-counts. In-memory and leader-lifetime only
   // (not serialized): seeded turns keep their baked-in counts after a handover.
   private seenRequests = new Map<string, Set<string>>();
-  // Running cost per local calendar day ("YYYY-MM-DD"). Banked as events arrive
+  // Running cost per UTC calendar day ("YYYY-MM-DD"). Banked as events arrive
   // (deduped via seenRequests) and persisted, so day/week/month totals survive
   // turn pruning.
   private dailyCost = new Map<string, number>();
@@ -188,9 +188,9 @@ export class Aggregator extends EventEmitter {
   }
 
   /**
-   * Fold the retained turns into the daily ledger, banking each local day's
-   * summed cost. Uses max(banked, sum-of-retained-turns-that-day) so that once a
-   * day's turns start aging out of the retained set, its already-banked total is
+   * Fold the retained turns into the daily ledger, banking each UTC day's summed
+   * cost. Uses max(banked, sum-of-retained-turns-that-day) so that once a day's
+   * turns start aging out of the retained set, its already-banked total is
    * preserved rather than shrinking. Recomputing from turns (instead of adding
    * per event) also self-heals: the ledger fills in immediately from existing
    * history, e.g. after upgrading from a version that had no ledger.
@@ -199,7 +199,7 @@ export class Aggregator extends EventEmitter {
     const fromTurns = new Map<string, number>();
     for (const t of this.turns.values()) {
       if (!t.costUsd) continue;
-      const key = localDayKey(t.lastMs);
+      const key = utcDayKey(t.lastMs);
       fromTurns.set(key, (fromTurns.get(key) ?? 0) + t.costUsd);
     }
     for (const [key, sum] of fromTurns) {
@@ -209,7 +209,7 @@ export class Aggregator extends EventEmitter {
 
   /** Drop ledger days older than the cost-retention window. */
   private pruneDailyCost(): void {
-    const cutoffKey = localDayKey(Date.now() - COST_LEDGER_DAYS * DAY_MS);
+    const cutoffKey = utcDayKey(Date.now() - COST_LEDGER_DAYS * DAY_MS);
     for (const key of this.dailyCost.keys()) {
       if (key < cutoffKey) this.dailyCost.delete(key);
     }

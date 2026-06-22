@@ -121,6 +121,7 @@ export class StatsPanel {
         <span class="hero-num">${fmtTokPerSec(v.totalTokPerSec)}</span>
         <span class="hero-unit">tok/s</span>
       </div>
+
       <div class="hero-sub">Output Tokens (Thinking + Text) / Total Request Time</div>
 
       <hr />
@@ -191,8 +192,9 @@ export class StatsPanel {
       per-request time. Stats are global across all Claude Code sessions (each
       tracked separately, so concurrent sessions don't cut each other's turns
       short), not filtered to this VS Code window. Cost totals (Today, This Week
-      from Monday, This Month) are estimates summed in local time and accrue only
-      from when telemetry was enabled.</p>`;
+      from Monday, This Month) are estimates bucketed by UTC day (interaction
+      times above are shown in local time) and accrue only from when telemetry
+      was enabled.</p>`;
   }
 }
 
