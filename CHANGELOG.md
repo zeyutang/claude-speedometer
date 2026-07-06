@@ -11,9 +11,9 @@ follows [Semantic Versioning](https://semver.org).
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
-## 1.6.5 - 2026-07-05
+## 1.6.6 - 2026-07-05
 
-- Trim status bar display
+- Trim status bar item display
 
 ## 1.6.4 - 2026-06-21
 

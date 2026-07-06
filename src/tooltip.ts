@@ -52,7 +52,6 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   L.push(`**Latest interaction** · ${fmtWhen(v.lastMs, now)}`);
   L.push("");
   L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/s`);
-  L.push(`Output Tokens (Thinking + Text) / Total Request Time`);
 
   const sections: Section[] = [
     {
