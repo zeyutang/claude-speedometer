@@ -74,7 +74,7 @@ export class StatsPanel {
   private render(): string {
     const now = Date.now();
     const latest = this.store.getLatest();
-    const recent = this.store.getRecent(8);
+    const recent = this.store.getRecent(20);
     const cost = this.store.getCostWindows(now);
     const body = latest
       ? this.renderTurn(viewOf(latest, now), recent, now, cost)

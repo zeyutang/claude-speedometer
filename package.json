@@ -63,8 +63,8 @@
         },
         "claudeSpeedometer.statusBarPriority": {
           "type": "number",
-          "default": -9007199254740991,
-          "description": "Status bar priority within the right-hand cluster. Higher = further left, lower = further right. The default (-Number.MAX_SAFE_INTEGER) keeps the bolt at the far right, immediately left of the notification bell."
+          "default": -1000001,
+          "description": "Status bar priority within the right-hand cluster. Higher = further left, lower = further right."
         },
         "claudeSpeedometer.retentionDays": {
           "type": "number",

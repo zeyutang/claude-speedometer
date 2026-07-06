@@ -14,10 +14,11 @@ const FIGURE_SPACE = "\u2007";
 
 /**
  * Status-bar variant of {@link fmtTokPerSec}: one decimal place, with the integer
- * part reserved to three digits using figure spaces so the rendered width stays
- * constant for any value below 1000 ("5.0" and "999.9" occupy the same space).
+ * part reserved to two digits using figure spaces so the rendered width stays
+ * constant for any value below 100 ("5.0" and "99.9" occupy the same space).
  * This keeps the status-bar item from jittering as the digit count changes; values
- * >= 1000 tok/s gain a thousands separator and simply widen the item, which is rare.
+ * >= 100 tok/s widen the item by one character (and >= 1000 also gain a thousands
+ * separator), which is uncommon in practice.
  * `undefined` (no interaction yet) renders as a right-aligned "-".
  */
 export function fmtTokPerSecFixed(n: number | undefined): string {
@@ -28,7 +29,7 @@ export function fmtTokPerSecFixed(n: number | undefined): string {
           maximumFractionDigits: 1,
         })
       : "-";
-  return s.padStart(5, FIGURE_SPACE); // "999.9", the widest padded form, is 5 chars
+  return s.padStart(4, FIGURE_SPACE); // "99.9", the widest padded form, is 4 chars
 }
 
 /** ms -> "812 ms" or "15.1 s". */

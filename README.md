@@ -67,25 +67,3 @@ The extension does no pricing math of its own: Claude Code computes each request
 | `claudeSpeedometer.exportIntervalMs`  | `2000`                     | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive.                                                             |
 | `claudeSpeedometer.statusBarPriority` | `-Number.MAX_SAFE_INTEGER` | Position in the right cluster. Higher = further left; the default pins the bolt at the far right, immediately left of the notification bell. |
 | `claudeSpeedometer.retentionDays`     | `7`                        | Discard interactions older than this many days.                                                                                              |
-
-## How it works
-
-VS Code extensions can't read Claude Code's internal timing directly, so the extension runs a tiny OTLP/HTTP receiver on `localhost:4318` (loopback only), and Claude Code is configured to export its telemetry there. Each `claude_code.api_request` event carries the token, timing, and cost fields shown above.
-
-It is **one machine-wide speedometer**: each VS Code window tries to bind the port; the one that succeeds runs the receiver and publishes to a shared file (`~/.claude-speedometer/state.json`, the last 1,000 turns / 7 days plus ~70 days of daily cost totals, safe to delete), and every other window mirrors that file. When the leader window closes, a follower takes over within a couple of seconds.
-
-## Development
-
-```bash
-npm install
-npm run compile      # or: npm run watch
-```
-
-To try a change, build a `.vsix` with [`vsce`](https://github.com/microsoft/vscode-vsce) and install it:
-
-```bash
-npx @vscode/vsce package
-code --install-extension claude-speedometer-<version>.vsix --force
-```
-
-Then run **Developer: Reload Window** so the new build loads. The receiver is machine-wide, so reload every open window (or restart VS Code) for the leader to pick up the new code, then restart Claude Code.
