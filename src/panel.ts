@@ -1,11 +1,11 @@
 import * as vscode from "vscode";
 import { SpeedStore } from "./store";
 import {
-  fmtClock,
   fmtCost,
   fmtEffort,
   fmtInt,
   fmtTime,
+  fmtTimestamp,
   fmtTokPerSec,
   fmtWhen,
   isFastModeOn,
@@ -102,11 +102,15 @@ export class StatsPanel {
     const recentRows = recent
       .map((t) => {
         const rv = viewOf(t, now);
+        const session = rv.sessionId ? rv.sessionId.slice(0, 8) : "-";
+        const model = rv.model ?? "-";
         return `<tr>
-          <td>${fmtClock(rv.lastMs, now)}</td>
+          <td>${fmtTimestamp(rv.lastMs)}</td>
+          <td>${escapeHtml(session)}</td>
+          <td title="${escapeHtml(model)}">${escapeHtml(model)}</td>
+          <td class="num">${fmtInt(rv.inputTokens)}</td>
           <td class="num">${fmtInt(rv.outputTokens)}</td>
           <td class="num">${fmtTokPerSec(rv.totalTokPerSec)}</td>
-          <td class="num">${fmtTime(rv.totalMs)}</td>
         </tr>`;
       })
       .join("");
@@ -166,29 +170,38 @@ export class StatsPanel {
       ])}
 
       <hr />
-      <h3>Context</h3>
+      <h3>Workspace</h3>
       ${kv([
         ["Session", v.sessionId ? v.sessionId.slice(0, 8) : "-"],
         v.workspace
-          ? ["Workspace", ellipsizeLeft(v.workspace, 48), v.workspace]
-          : ["Workspace", "-"],
+          ? ["Directory", ellipsizeLeft(v.workspace, 48), v.workspace]
+          : ["Directory", "-"],
       ])}
 
       <hr />
       <h3>Recent interactions</h3>
       <table class="recent">
         <colgroup>
-          <col style="width:34%" />
-          <col style="width:22%" />
-          <col style="width:22%" />
-          <col style="width:22%" />
+          <col style="width:24%" />
+          <col style="width:12%" />
+          <col style="width:20%" />
+          <col style="width:15%" />
+          <col style="width:15%" />
+          <col style="width:14%" />
         </colgroup>
-        <thead><tr><th>When</th><th class="num">Output</th><th class="num">tok/s</th><th class="num">Total</th></tr></thead>
+        <thead><tr>
+          <th>When</th>
+          <th>Session</th>
+          <th>Model</th>
+          <th class="num">Input</th>
+          <th class="num">Output</th>
+          <th class="num">Speed</th>
+        </tr></thead>
         <tbody>${recentRows}</tbody>
       </table>
       <p class="muted note">Each row aggregates all API calls (including tool
       steps) of one prompt. Output tokens include both thinking and visible text
-      (the API does not separate them), and tok/s is output over summed
+      (the API does not separate them), and Speed (tok/s) is output over summed
       per-request time. Stats are global across all Claude Code sessions (each
       tracked separately, so concurrent sessions don't cut each other's turns
       short), not filtered to this VS Code window. Cost totals (Today, This Week
@@ -235,7 +248,7 @@ function wrapHtml(body: string): string {
     font-size: var(--vscode-font-size);
     color: var(--vscode-foreground);
     padding: 12px 16px;
-    max-width: 460px;
+    max-width: 680px;
   }
   hr {
     border: none;
@@ -259,10 +272,12 @@ function wrapHtml(body: string): string {
   .kv { display: grid; grid-template-columns: 1fr auto; row-gap: 5px; column-gap: 16px; }
   .kv .k { color: var(--vscode-descriptionForeground); }
   .kv .v { text-align: right; font-variant-numeric: tabular-nums; }
-  table.recent { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
-  table.recent th { font-weight: 500; color: var(--vscode-descriptionForeground); padding: 2px 0; font-size: 12px; text-align: left; }
+  table.recent { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; font-size: 12px; }
+  table.recent th { font-weight: 500; color: var(--vscode-descriptionForeground); text-align: left; }
+  table.recent th, table.recent td { padding: 2px 0; }
+  table.recent th:not(:last-child), table.recent td:not(:last-child) { padding-right: 12px; }
   table.recent th.num, table.recent td.num { text-align: right; }
-  table.recent td { padding: 2px 0; }
+  table.recent td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .note { margin-top: 12px; }
   .empty { text-align: center; padding: 28px 8px; }
   code { background: var(--vscode-textCodeBlock-background); padding: 1px 4px; border-radius: 3px; }

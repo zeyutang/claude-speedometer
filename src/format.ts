@@ -32,11 +32,21 @@ export function fmtTokPerSecFixed(n: number | undefined): string {
   return s.padStart(4, FIGURE_SPACE); // "99.9", the widest padded form, is 4 chars
 }
 
-/** ms -> "812 ms" or "15.1 s". */
+/** ms as a duration: "812ms" below a second, otherwise "1h 2min 3sec" with the
+ *  hour and minute parts dropped while they are zero (seconds are always shown).
+ *  Seconds are whole numbers; sub-second values fall back to integer ms. */
 export function fmtTime(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return "-";
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  return `${(ms / 1000).toFixed(1)} s`;
+  if (Math.round(ms) < 1000) return `${Math.round(ms)}ms`;
+  const totalSec = Math.round(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (h > 0 || m > 0) parts.push(`${m}min`);
+  parts.push(`${s}sec`);
+  return parts.join(" ");
 }
 
 export function fmtCost(usd: number): string {
@@ -91,6 +101,19 @@ export function fmtClock(ms: number, nowMs: number): string {
     minute: "2-digit",
   });
   return `${date}, ${time}`;
+}
+
+/** Fixed-width local timestamp "YYYY-MM-DD HH:MM:SS" (24-hour). The uniform
+ *  length keeps tabular rows aligned; unlike {@link fmtClock} it never
+ *  abbreviates or switches format across days. */
+export function fmtTimestamp(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "-";
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+  );
 }
 
 /** Absolute time plus a relative hint: "2:34:05 PM (5s ago)". The absolute part

@@ -40,8 +40,8 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
 - **Timing**: total request time and API request count.
 - **Cost (estimated)**: spend for the current interaction, today, this week (from Monday), and this month. Day/week/month windows are bucketed by **UTC** calendar day; the totals accrue from when telemetry was enabled and survive turn pruning. See [where the cost figures come from](#where-the-cost-figures-come-from) for how the dollar amounts are computed and what they mean.
 - **Model**: model, plus **reasoning effort** (only when the model supports it) and **Fast mode** (only when it is on).
-- **Recent**: the last several interactions at a glance.
-- **Context** (tab only): the session id and the full workspace path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
+- **Recent** (tab only): the last several interactions, one row each, with timestamp, session id, model, input tokens, output tokens, and speed (tok/s).
+- **Workspace** (tab only): the session id and the full directory path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
 
 A few things to know about the numbers:
 
