@@ -110,7 +110,7 @@ export class StatsPanel {
           <td title="${escapeHtml(model)}">${escapeHtml(model)}</td>
           <td class="num">${fmtInt(rv.inputTokens)}</td>
           <td class="num">${fmtInt(rv.outputTokens)}</td>
-          <td class="num">${fmtTokPerSec(rv.totalTokPerSec)}</td>
+          <td class="num">${fmtTokPerSec(rv.totalTokPerSec)} <span class="unit">tok/s</span></td>
         </tr>`;
       })
       .join("");
@@ -146,9 +146,9 @@ export class StatsPanel {
       ])}
 
       <hr />
-      <h3>Cost (estimated)</h3>
+      <h3>Cost (estimated, UTC-bucketed)</h3>
       ${kv([
-        ["Current Interaction", fmtCost(v.costUsd)],
+        ["Latest Interaction", fmtCost(v.costUsd)],
         ["Today", fmtCost(cost.today)],
         ["This Week", fmtCost(cost.week)],
         ["This Month", fmtCost(cost.month)],
@@ -185,12 +185,12 @@ export class StatsPanel {
           <col style="width:24%" />
           <col style="width:12%" />
           <col style="width:20%" />
-          <col style="width:15%" />
-          <col style="width:15%" />
           <col style="width:14%" />
+          <col style="width:14%" />
+          <col style="width:16%" />
         </colgroup>
         <thead><tr>
-          <th>When</th>
+          <th>When (Local Time)</th>
           <th>Session</th>
           <th>Model</th>
           <th class="num">Input</th>
@@ -278,6 +278,7 @@ function wrapHtml(body: string): string {
   table.recent th:not(:last-child), table.recent td:not(:last-child) { padding-right: 12px; }
   table.recent th.num, table.recent td.num { text-align: right; }
   table.recent td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.recent .unit { color: var(--vscode-descriptionForeground); font-size: 11px; }
   .note { margin-top: 12px; }
   .empty { text-align: center; padding: 28px 8px; }
   code { background: var(--vscode-textCodeBlock-background); padding: 1px 4px; border-radius: 3px; }

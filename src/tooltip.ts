@@ -55,6 +55,16 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
 
   const sections: Section[] = [
     {
+      title: "Model",
+      rows: [
+        ["Model", v.model ?? "-"],
+        // Effort row appears only when the model reports an effort setting.
+        ...(v.effort ? [["Effort", fmtEffort(v.effort)] as Row] : []),
+        // Fast mode row appears only when the model supports it and it is on.
+        ...(isFastModeOn(v.speed) ? [["Fast mode", "On"] as Row] : []),
+      ],
+    },
+    {
       title: "Tokens",
       rows: [
         ["Input", fmtInt(v.inputTokens)],
@@ -75,16 +85,6 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
       rows: [
         ["Latest interaction", fmtCost(v.costUsd)],
         ["Today", fmtCost(cw.today)],
-      ],
-    },
-    {
-      title: "Model",
-      rows: [
-        ["Model", v.model ?? "-"],
-        // Effort row appears only when the model reports an effort setting.
-        ...(v.effort ? [["Effort", fmtEffort(v.effort)] as Row] : []),
-        // Fast mode row appears only when the model supports it and it is on.
-        ...(isFastModeOn(v.speed) ? [["Fast mode", "On"] as Row] : []),
       ],
     },
   ];
