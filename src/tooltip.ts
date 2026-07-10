@@ -49,7 +49,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   const cw = store.getCostWindows(now);
 
   const L: string[] = [];
-  L.push(`**Latest interaction** · ${fmtWhen(v.lastMs, now)}`);
+  L.push(`**Latest Interaction** · ${fmtWhen(v.lastMs, now)}`);
   L.push("");
   L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/s`);
 
@@ -60,8 +60,8 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
         ["Model", v.model ?? "-"],
         // Effort row appears only when the model reports an effort setting.
         ...(v.effort ? [["Effort", fmtEffort(v.effort)] as Row] : []),
-        // Fast mode row appears only when the model supports it and it is on.
-        ...(isFastModeOn(v.speed) ? [["Fast mode", "On"] as Row] : []),
+        // Fast Mode row appears only when the model supports it and it is on.
+        ...(isFastModeOn(v.speed) ? [["Fast Mode", "On"] as Row] : []),
       ],
     },
     {
@@ -83,7 +83,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
     {
       title: "Cost (estimated)",
       rows: [
-        ["Latest interaction", fmtCost(v.costUsd)],
+        ["Latest Interaction", fmtCost(v.costUsd)],
         ["Today", fmtCost(cw.today)],
       ],
     },

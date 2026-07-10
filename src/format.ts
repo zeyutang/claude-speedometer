@@ -51,8 +51,13 @@ export function fmtTime(ms: number): string {
 
 export function fmtCost(usd: number): string {
   if (!usd) return "$0.00";
-  if (usd < 0.01) return `$${usd.toFixed(4)}`;
-  return `$${usd.toFixed(2)}`;
+  // Group thousands ("$1,083.28", "$1,234,567.89"). Sub-cent amounts keep four
+  // decimals so tiny per-interaction costs don't collapse to "$0.00".
+  const digits = usd < 0.01 ? 4 : 2;
+  return `$${usd.toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}`;
 }
 
 /** Claude Code's `speed` attribute: true only when fast mode is on. */

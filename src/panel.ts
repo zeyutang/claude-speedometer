@@ -104,10 +104,17 @@ export class StatsPanel {
         const rv = viewOf(t, now);
         const session = rv.sessionId ? rv.sessionId.slice(0, 8) : "-";
         const model = rv.model ?? "-";
+        // Model column reads e.g. "...opus-4-8 | max": abbreviate the "claude-"
+        // prefix to "..." and append the lowercased effort level. The title
+        // keeps the full, unabbreviated id (with effort) for hover.
+        const modelShort = model.replace(/^claude-/, "...");
+        const effort = rv.effort ? rv.effort.toLowerCase() : "";
+        const modelCell = effort ? `${modelShort} | ${effort}` : modelShort;
+        const modelTitle = effort ? `${model} | ${effort}` : model;
         return `<tr>
           <td>${fmtTimestamp(rv.lastMs)}</td>
           <td>${escapeHtml(session)}</td>
-          <td title="${escapeHtml(model)}">${escapeHtml(model)}</td>
+          <td title="${escapeHtml(modelTitle)}">${escapeHtml(modelCell)}</td>
           <td class="num">${fmtInt(rv.inputTokens)}</td>
           <td class="num">${fmtInt(rv.outputTokens)}</td>
           <td class="num">${fmtTokPerSec(rv.totalTokPerSec)} <span class="unit">tok/s</span></td>
@@ -117,7 +124,7 @@ export class StatsPanel {
 
     return `
       <div class="head">
-        <span class="title">Latest interaction</span>
+        <span class="title">Latest Interaction</span>
         <span class="muted">${fmtWhen(v.lastMs, now)}</span>
       </div>
 
@@ -163,7 +170,7 @@ export class StatsPanel {
         ...(v.effort
           ? [["Effort", fmtEffort(v.effort)] as [string, string]]
           : []),
-        // Fast mode row appears only when the model supports it and it is on.
+        // Fast Mode row appears only when the model supports it and it is on.
         ...(isFastModeOn(v.speed)
           ? [["Fast Mode", "On"] as [string, string]]
           : []),
@@ -182,17 +189,24 @@ export class StatsPanel {
       <h3>Recent interactions</h3>
       <table class="recent">
         <colgroup>
-          <col style="width:24%" />
-          <col style="width:12%" />
+          <!-- Width budget (percent of the table, sized for the panel's max
+               width). Each column reserves room for its worst case: the full
+               "YYYY-MM-DD HH:MM:SS" stamp, an 8-char session, a token count
+               into the billions ("1,000,000,000"), and a speed below 1000
+               ("999.99 tok/s"). Model is widest: it holds the abbreviated id
+               plus the effort suffix (e.g. "...haiku-4-5-20251001 | medium")
+               and is the only column that ellipsizes (full id on hover). -->
           <col style="width:20%" />
+          <col style="width:11%" />
+          <col style="width:30%" />
           <col style="width:14%" />
           <col style="width:14%" />
-          <col style="width:16%" />
+          <col style="width:11%" />
         </colgroup>
         <thead><tr>
           <th>When (Local Time)</th>
           <th>Session</th>
-          <th>Model</th>
+          <th>Model | Effort</th>
           <th class="num">Input</th>
           <th class="num">Output</th>
           <th class="num">Speed</th>
@@ -248,7 +262,7 @@ function wrapHtml(body: string): string {
     font-size: var(--vscode-font-size);
     color: var(--vscode-foreground);
     padding: 12px 16px;
-    max-width: 680px;
+    max-width: 720px;
   }
   hr {
     border: none;
