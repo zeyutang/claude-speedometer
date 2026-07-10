@@ -198,9 +198,9 @@ export class StatsPanel {
                and is the only column that ellipsizes (full id on hover). -->
           <col style="width:20%" />
           <col style="width:11%" />
-          <col style="width:30%" />
-          <col style="width:14%" />
-          <col style="width:14%" />
+          <col style="width:20%" />
+          <col style="width:19%" />
+          <col style="width:19%" />
           <col style="width:11%" />
         </colgroup>
         <thead><tr>
