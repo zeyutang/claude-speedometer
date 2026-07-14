@@ -19,6 +19,7 @@ interface Section {
 
 const GAP = "     "; // spacing between the label and value columns
 const MIN_VALUE_WIDTH = 12; // keep the value column roomy even for small numbers
+const MAX_VALUE_WIDTH = 14; // wider values (e.g. a dated model id) overflow their own row
 
 /**
  * The overlay shown when hovering the bolt: a rich Markdown box that pops up just
@@ -89,16 +90,27 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
     },
   ];
 
-  // One shared right edge across every section's key/value block.
+  // One shared right edge across every section's key/value block. A value wider than
+  // MAX_VALUE_WIDTH (e.g. a dated model id) is an outlier: it does not widen the shared
+  // column, so the numeric rows stay compact and only the outlier's own row overflows.
   const allRows = sections.flatMap((s) => s.rows);
   const kw = Math.max(...allRows.map((r) => r[0].length));
-  const vw = Math.max(MIN_VALUE_WIDTH, ...allRows.map((r) => r[1].length));
+  const vw = Math.max(
+    MIN_VALUE_WIDTH,
+    ...allRows.map((r) => r[1].length).filter((n) => n <= MAX_VALUE_WIDTH)
+  );
 
   for (const s of sections) {
     L.push("", "---", "");
     L.push(`**${s.title}**`);
     const body = s.rows
-      .map(([k, val]) => `${k.padEnd(kw)}${GAP}${val.padStart(vw)}`)
+      .map(([k, val]) =>
+        // A value wider than the column overflows: drop the padding so it is not pushed
+        // rightward past the popup's wrap point, keeping it on the label's line.
+        val.length > vw
+          ? `${k}${GAP}${val}`
+          : `${k.padEnd(kw)}${GAP}${val.padStart(vw)}`
+      )
       .join("\n");
     L.push("```text\n" + body + "\n```");
   }
