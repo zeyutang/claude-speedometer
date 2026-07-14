@@ -92,25 +92,27 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
 
   // One shared right edge across every section's key/value block. A value wider than
   // MAX_VALUE_WIDTH (e.g. a dated model id) is an outlier: it does not widen the shared
-  // column, so the numeric rows stay compact and only the outlier's own row overflows.
+  // column, so the numeric rows stay compact, yet it still right-aligns to the same edge
+  // by borrowing the room left free by its short key.
   const allRows = sections.flatMap((s) => s.rows);
   const kw = Math.max(...allRows.map((r) => r[0].length));
   const vw = Math.max(
     MIN_VALUE_WIDTH,
     ...allRows.map((r) => r[1].length).filter((n) => n <= MAX_VALUE_WIDTH)
   );
+  const rightEdge = kw + GAP.length + vw; // column where every value's last char lands
 
   for (const s of sections) {
     L.push("", "---", "");
     L.push(`**${s.title}**`);
     const body = s.rows
-      .map(([k, val]) =>
-        // A value wider than the column overflows: drop the padding so it is not pushed
-        // rightward past the popup's wrap point, keeping it on the label's line.
-        val.length > vw
-          ? `${k}${GAP}${val}`
-          : `${k.padEnd(kw)}${GAP}${val.padStart(vw)}`
-      )
+      .map(([k, val]) => {
+        // Right-align the value to the shared edge. Normal rows keep at least a full GAP;
+        // a wide value (e.g. a model id) eats into that gap. One too wide to fit even
+        // against its key keeps a single GAP and overflows on its own row.
+        const pad = rightEdge - k.length - val.length;
+        return pad >= 1 ? `${k}${" ".repeat(pad)}${val}` : `${k}${GAP}${val}`;
+      })
       .join("\n");
     L.push("```text\n" + body + "\n```");
   }
