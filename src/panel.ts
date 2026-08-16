@@ -6,6 +6,7 @@ import {
   fmtInt,
   fmtTime,
   fmtTimestamp,
+  fmtTimestampShort,
   fmtTokPerSec,
   fmtWhen,
   isFastModeOn,
@@ -111,8 +112,20 @@ export class StatsPanel {
         const effort = rv.effort ? rv.effort.toLowerCase() : "";
         const modelCell = effort ? `${modelShort} | ${effort}` : modelShort;
         const modelTitle = effort ? `${model} | ${effort}` : model;
+        // Workspace column shows just the innermost folder ("claude-speedometer"),
+        // the part that identifies the project; the full path is the hover title.
+        // It falls back to "-" for turns whose transcript could not be read, and
+        // for history recorded before paths were resolved.
+        const workspace = rv.workspace;
+        const workspaceCell = workspace ? leafDir(workspace) : "-";
+        const workspaceTitle = workspace
+          ? ` title="${escapeHtml(workspace)}"`
+          : "";
         return `<tr>
-          <td>${fmtTimestamp(rv.lastMs)}</td>
+          <td title="${fmtTimestamp(rv.lastMs)}">${fmtTimestampShort(
+          rv.lastMs
+        )}</td>
+          <td${workspaceTitle}>${escapeHtml(workspaceCell)}</td>
           <td>${escapeHtml(session)}</td>
           <td title="${escapeHtml(modelTitle)}">${escapeHtml(modelCell)}</td>
           <td class="num">${fmtInt(rv.inputTokens)}</td>
@@ -189,22 +202,30 @@ export class StatsPanel {
       <h3>Recent interactions</h3>
       <table class="recent">
         <colgroup>
-          <!-- Width budget (percent of the table, sized for the panel's max
-               width). Each column reserves room for its worst case: the full
-               "YYYY-MM-DD HH:MM:SS" stamp, an 8-char session, a token count
-               into the billions ("1,000,000,000"), and a speed below 1000
-               ("999.99 tok/s"). Model is widest: it holds the abbreviated id
-               plus the effort suffix (e.g. "...haiku-4-5-20251001 | medium")
-               and is the only column that ellipsizes (full id on hover). -->
-          <col style="width:20%" />
+          <!-- Width budget, in percent of the table (the body's max width, less
+               ~12px when a scrollbar is present). Every column is its worst-case
+               content plus one shared 12px gutter (the cells' padding-right), so
+               the columns sit as close together as their contents allow and a
+               full row's gaps are even. Worst cases, measured at this table's
+               12px type: the year-less "MM-DD HH:MM:SS" stamp, a 20-character
+               folder name, an 8-char session, a "...haiku-4-5 | medium"-shaped
+               model cell, a seven-digit token count ("9,999,999", well past what
+               one interaction reaches), and a speed below 1000 ("999.99 tok/s").
+               The two variable-length cells run over on their rare long values,
+               ellipsizing in CSS with the full text on hover: a dated model id
+               ("...haiku-4-5-20251001 | medium") and an unusually long folder
+               name. -->
+          <col style="width:15.5%" />
+          <col style="width:21%" />
           <col style="width:11%" />
-          <col style="width:24%" />
-          <col style="width:17%" />
-          <col style="width:17%" />
-          <col style="width:11%" />
+          <col style="width:20.25%" />
+          <col style="width:10.75%" />
+          <col style="width:10.75%" />
+          <col style="width:10.75%" />
         </colgroup>
         <thead><tr>
-          <th>When (Local Time)</th>
+          <th>When (Local)</th>
+          <th>Workspace</th>
           <th>Session</th>
           <th>Model | Effort</th>
           <th class="num">Input</th>
@@ -213,15 +234,18 @@ export class StatsPanel {
         </tr></thead>
         <tbody>${recentRows}</tbody>
       </table>
-      <p class="muted note">Each row aggregates all API calls (including tool
-      steps) of one prompt. Output tokens include both thinking and visible text
-      (the API does not separate them), and Speed (tok/s) is output over summed
-      per-request time. Stats are global across all Claude Code sessions (each
-      tracked separately, so concurrent sessions don't cut each other's turns
-      short), not filtered to this VS Code window. Cost totals (Today, This Week
-      from Monday, This Month) are estimates bucketed by UTC day (interaction
-      times above are shown in local time) and accrue only from when telemetry
-      was enabled.</p>`;
+      <p class="muted note">Each row aggregates the API calls (including tool
+      steps) one prompt made to one model. Requests Claude Code routes to a
+      different model while a prompt runs, such as the Haiku call that names a
+      new session, therefore get their own row instead of adding their tokens to
+      yours. Output tokens include both thinking and visible text (the API does
+      not separate them), and Speed (tok/s) is output over summed per-request
+      time. Stats are global across all Claude Code sessions (each tracked
+      separately, so concurrent sessions don't cut each other's turns short),
+      not filtered to this VS Code window. Cost totals (Today, This Week from
+      Monday, This Month) are estimates bucketed by UTC day (interaction times
+      above are shown in local time) and accrue only from when telemetry was
+      enabled.</p>`;
   }
 }
 
@@ -243,6 +267,15 @@ function ellipsizeLeft(s: string, max: number): string {
   return "…" + s.slice(-(max - 1));
 }
 
+/** The innermost folder of a workspace path ("~/apps/my-project" -> "my-project"),
+ *  which is what identifies the project at a glance. Splits on both separators so
+ *  a Windows path resolves too, and falls back to the whole string if the path has
+ *  no named segment (e.g. "/"). */
+function leafDir(p: string): string {
+  const parts = p.split(/[/\\]/).filter(Boolean);
+  return parts.length > 0 ? parts[parts.length - 1] : p;
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -262,7 +295,11 @@ function wrapHtml(body: string): string {
     font-size: var(--vscode-font-size);
     color: var(--vscode-foreground);
     padding: 12px 16px;
-    max-width: 720px;
+    /* The Recent table's seven columns at their worst-case content plus a 12px
+       gutter each, which is what sets the panel's width: sized any wider, the
+       table's fixed columns would stretch and reintroduce the dead space
+       between them. */
+    max-width: 672px;
   }
   hr {
     border: none;

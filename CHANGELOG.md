@@ -11,6 +11,19 @@ follows [Semantic Versioning](https://semver.org).
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
+## 1.7.0 - 2026-08-16
+
+- Interactions are now counted per model. A request Claude Code routes to a
+  different model while your prompt runs, such as the Haiku call that names a
+  new session, gets its own row with its own tokens instead of being merged
+  into your turn and relabelling it.
+- Added a Workspace column to the Recent interactions table, showing the
+  innermost folder of each interaction's directory, with the full path on hover.
+- Tightened the Recent interactions table. Every column is now sized to its
+  content with one shared gutter, so the columns no longer drift apart; token
+  counts take the width they actually reach, timestamps drop the year, and the
+  stats tab is narrower to match. Hover any shortened cell for its full value.
+
 ## 1.6.10 - 2026-07-14
 
 - Refine model name overflow in status bar item display

@@ -4,7 +4,8 @@
  *  resource attributes. Values are coerced to primitives. */
 export type Attrs = Record<string, string | number | boolean>;
 
-/** One Claude Code "interaction" = all api_request events sharing a prompt.id. */
+/** One Claude Code "interaction" = the api_request events that share a prompt.id
+ *  *and* a model configuration (see {@link turnKey}). */
 export interface Turn {
   promptId: string;
 
@@ -25,13 +26,36 @@ export interface Turn {
 
   costUsd: number;
 
-  // context (last-write-wins; stable within a turn anyway)
+  // identity (part of the key; fixed when the turn is created)
   model?: string;
-  speed?: string;
   effort?: string;
+
+  // context (last-write-wins; stable within a turn anyway)
+  speed?: string;
   sessionId?: string;
   terminalType?: string;
   workspace?: string; // resolved from session.id -> transcript cwd
+}
+
+/**
+ * Identity of one interaction: a prompt's API calls to a single model
+ * configuration (model plus reasoning effort).
+ *
+ * Claude Code stamps every request it issues while a prompt is in flight with
+ * that prompt's id, including calls it routes to a different model: at the start
+ * of a session it asks Haiku to name the session, and that request carries the
+ * first prompt's id. Keying on prompt.id alone would fold such a call into the
+ * user's turn, adding its tokens to the turn's counts and relabelling the row
+ * with whichever model happened to report last. Making the model configuration
+ * part of the key gives each one its own row: the tokens land on the model that
+ * produced them, and a row's Model | Effort label can never change once the row
+ * exists.
+ *
+ * NUL separates the parts, a byte none of them can contain, so no two distinct
+ * triples ever collide on one key.
+ */
+export function turnKey(t: Pick<Turn, "promptId" | "model" | "effort">): string {
+  return `${t.promptId}\u0000${t.model ?? ""}\u0000${t.effort ?? ""}`;
 }
 
 /** Read a single OTLP AnyValue into a JS primitive. */
@@ -130,13 +154,19 @@ export function costWindows(
   return out;
 }
 
-/** The turn to display: the one whose prompt.id is the current display id. */
+/** The turn to display: the one whose {@link turnKey} is the current display id.
+ *  A snapshot written before rows were keyed per model carries a bare prompt.id,
+ *  so fall back to matching that, keeping the bar populated across an upgrade
+ *  (and while a window still running the older build is the leader). */
 export function selectLatest(
   turns: Turn[],
   displayId: string | undefined
 ): Turn | undefined {
   if (!displayId) return undefined;
-  return turns.find((t) => t.promptId === displayId);
+  return (
+    turns.find((t) => turnKey(t) === displayId) ??
+    turns.find((t) => t.promptId === displayId)
+  );
 }
 
 /** Most recent turns that produced output, newest first. */

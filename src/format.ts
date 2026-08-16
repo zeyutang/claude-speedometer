@@ -121,6 +121,15 @@ export function fmtTimestamp(ms: number): string {
   );
 }
 
+/** {@link fmtTimestamp} without the year: "MM-DD HH:MM:SS". Retention is a
+ *  handful of days, so the year is the one part of the stamp that never varies
+ *  across the list, and dropping it buys a column's worth of width. Callers pair
+ *  it with the full stamp on hover. */
+export function fmtTimestampShort(ms: number): string {
+  const full = fmtTimestamp(ms);
+  return full === "-" ? full : full.slice(5);
+}
+
 /** Absolute time plus a relative hint: "2:34:05 PM (5s ago)". The absolute part
  *  is the source of truth; the relative part stays current only if the caller
  *  re-renders periodically (see the refresh timers in the status bar / panel). */

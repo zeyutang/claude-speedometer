@@ -7,6 +7,7 @@ import {
   selectLatest,
   selectRecent,
   str,
+  turnKey,
   utcDayKey,
 } from "./types";
 import { resolveWorkspace } from "./workspace";
@@ -29,7 +30,8 @@ function isoMs(v: string | undefined): number | undefined {
 }
 
 /**
- * Folds Claude Code OTEL events into per-turn aggregates (keyed by prompt.id).
+ * Folds Claude Code OTEL events into per-turn aggregates (keyed by
+ * {@link turnKey}: prompt.id plus model configuration).
  *
  * Only *completed* turns are displayed: while a turn is still receiving
  * api_request events it stays "running" and the bar keeps showing the previous
@@ -44,19 +46,24 @@ function isoMs(v: string | undefined): number | undefined {
  * time between requests are excluded. Each request_id is folded in once, so a
  * redelivered export never double-counts a turn.
  *
+ * Running state is tracked at prompt grain even though rows are finer: one
+ * prompt's rows start and complete together, so a helper call on another model
+ * never shows up on its own while the prompt it belongs to is still working.
+ *
  * Emits "update" only when the displayed (finalized) turn changes.
  */
 export class Aggregator extends EventEmitter {
-  private turns = new Map<string, Turn>(); // insertion-ordered, prompt.id -> Turn
-  private displayId: string | undefined; // last finalized turn (shown)
+  private turns = new Map<string, Turn>(); // insertion-ordered, turnKey -> Turn
+  private displayId: string | undefined; // turnKey of the last finalized turn
   // Per session.id, the prompt.id currently receiving requests. Scoping by
   // session keeps concurrent sessions from cross-finalizing one another.
   private runningBySession = new Map<string, string>();
   // Per session.id quiet-timer, so each session finalizes on its own idle gap.
   private settleTimers = new Map<string, NodeJS.Timeout>();
   // Per prompt.id, the request_ids already folded in, so a duplicated or
-  // redelivered export never double-counts. In-memory and leader-lifetime only
-  // (not serialized): seeded turns keep their baked-in counts after a handover.
+  // redelivered export never double-counts. Kept at prompt grain so a prompt's
+  // rows share one dedup scope. In-memory and leader-lifetime only (not
+  // serialized): seeded turns keep their baked-in counts after a handover.
   private seenRequests = new Map<string, Set<string>>();
   // Running cost per UTC calendar day ("YYYY-MM-DD"). Banked as events arrive
   // (deduped via seenRequests) and persisted, so day/week/month totals survive
@@ -113,12 +120,11 @@ export class Aggregator extends EventEmitter {
     if (ts > turn.lastMs) turn.lastMs = ts;
     if (ts < turn.startMs) turn.startMs = ts;
 
-    const model = str(attrs, "model");
-    if (model) turn.model = model;
+    // model and effort are part of the key, so they are already set and must
+    // not be reassigned: a request reporting a different pair belongs to a
+    // different row.
     const speed = str(attrs, "speed");
     if (speed) turn.speed = speed;
-    const effort = str(attrs, "effort");
-    if (effort) turn.effort = effort;
     const sessionId = str(attrs, "session.id");
     if (sessionId) turn.sessionId = sessionId;
     const terminal = str(attrs, "terminal.type");
@@ -142,8 +148,15 @@ export class Aggregator extends EventEmitter {
     this.armSettleTimer(scope, promptId);
   }
 
+  /** The row this request belongs to, created on first sight. The model and
+   *  effort it reports form part of the row's key, so a request Claude Code
+   *  routes to another model under the same prompt.id opens its own row rather
+   *  than landing in (and relabelling) the user's turn. */
   private ensureTurn(promptId: string, attrs: Attrs, nowMs: number): Turn {
-    let t = this.turns.get(promptId);
+    const model = str(attrs, "model");
+    const effort = str(attrs, "effort");
+    const key = turnKey({ promptId, model, effort });
+    let t = this.turns.get(key);
     if (!t) {
       t = {
         promptId,
@@ -156,19 +169,32 @@ export class Aggregator extends EventEmitter {
         cacheCreationTokens: 0,
         totalDurationMs: 0,
         costUsd: 0,
+        model,
+        effort,
         sessionId: str(attrs, "session.id"),
         terminalType: str(attrs, "terminal.type"),
       };
-      this.turns.set(promptId, t);
+      this.turns.set(key, t);
     }
     return t;
   }
 
-  /** Mark a turn as the displayed value and notify, if it produced output. */
+  /**
+   * Complete a prompt: pick the row to display and notify. A prompt can hold
+   * several rows (one per model configuration it used), so the displayed one is
+   * whichever produced the most output, which is the agent's own turn: the
+   * helper calls Claude Code makes alongside it (naming a session, summarizing
+   * a tool result) run on small models and emit a fraction of the tokens.
+   * A prompt that produced no output leaves the display untouched.
+   */
   private finalize(promptId: string): void {
-    const t = this.turns.get(promptId);
-    if (!t || t.outputTokens <= 0) return;
-    this.displayId = promptId;
+    let main: Turn | undefined;
+    for (const t of this.turns.values()) {
+      if (t.promptId !== promptId || t.outputTokens <= 0) continue;
+      if (!main || t.outputTokens > main.outputTokens) main = t;
+    }
+    if (!main) return;
+    this.displayId = turnKey(main);
     this.prune();
     this.emit("update");
   }
@@ -218,26 +244,37 @@ export class Aggregator extends EventEmitter {
   private prune(): void {
     this.pruneDailyCost();
     const cutoff = Date.now() - this.retentionDays * DAY_MS;
+    // Running prompts, protected as a whole: dropping one row of a prompt that
+    // is still accumulating would let its requests be counted again.
     const running = new Set(this.runningBySession.values());
-    for (const [id, t] of this.turns) {
+    for (const [key, t] of this.turns) {
       // Never drop a running or the displayed turn by age.
-      if (running.has(id) || id === this.displayId) continue;
-      if (t.lastMs < cutoff) {
-        this.turns.delete(id);
-        this.seenRequests.delete(id);
-      }
+      if (running.has(t.promptId) || key === this.displayId) continue;
+      if (t.lastMs < cutoff) this.turns.delete(key);
     }
     // Cap total size, evicting oldest first but never a running/displayed turn.
     while (this.turns.size > MAX_TURNS) {
       let evicted = false;
-      for (const id of this.turns.keys()) {
-        if (running.has(id) || id === this.displayId) continue;
-        this.turns.delete(id);
-        this.seenRequests.delete(id);
+      for (const [key, t] of this.turns) {
+        if (running.has(t.promptId) || key === this.displayId) continue;
+        this.turns.delete(key);
         evicted = true;
         break;
       }
       if (!evicted) break; // only protected turns remain
+    }
+    this.pruneSeenRequests();
+  }
+
+  /** Drop the request-id sets of prompts that have no rows left. They are keyed
+   *  at prompt grain, so one outlives any single row of its prompt and can only
+   *  be released once every row of that prompt is gone. */
+  private pruneSeenRequests(): void {
+    if (this.seenRequests.size === 0) return;
+    const live = new Set<string>();
+    for (const t of this.turns.values()) live.add(t.promptId);
+    for (const promptId of this.seenRequests.keys()) {
+      if (!live.has(promptId)) this.seenRequests.delete(promptId);
     }
   }
 
@@ -250,7 +287,7 @@ export class Aggregator extends EventEmitter {
   getRecent(limit: number): Turn[] {
     const running = new Set(this.runningBySession.values());
     const completed = [...this.turns.values()].filter(
-      (t) => !running.has(t.promptId) || t.promptId === this.displayId
+      (t) => !running.has(t.promptId) || turnKey(t) === this.displayId
     );
     return selectRecent(completed, limit);
   }
@@ -272,8 +309,12 @@ export class Aggregator extends EventEmitter {
   load(snap: Snapshot): void {
     this.turns.clear();
     this.seenRequests.clear();
-    for (const t of snap.turns) this.turns.set(t.promptId, t);
-    this.displayId = snap.displayId;
+    for (const t of snap.turns) this.turns.set(turnKey(t), t);
+    // Re-derive the display key from the turn it points at, so a snapshot
+    // written before rows were keyed per model (displayId is a bare prompt.id
+    // there) still resolves to the same turn.
+    const shown = selectLatest(snap.turns, snap.displayId);
+    this.displayId = shown ? turnKey(shown) : undefined;
     this.runningBySession.clear();
     this.dailyCost = new Map(Object.entries(snap.dailyCost ?? {}));
     // Seed the ledger from the retained turns too, so an upgrade from a version

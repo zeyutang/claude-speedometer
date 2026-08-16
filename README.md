@@ -40,14 +40,17 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
 - **Timing**: total request time and API request count.
 - **Cost (estimated)**: spend for the current interaction, today, this week (from Monday), and this month. Day/week/month windows are bucketed by **UTC** calendar day; the totals accrue from when telemetry was enabled and survive turn pruning. See [where the cost figures come from](#where-the-cost-figures-come-from) for how the dollar amounts are computed and what they mean.
 - **Model**: model, plus **reasoning effort** (only when the model supports it) and **Fast mode** (only when it is on).
-- **Recent** (tab only): the last several interactions, one row each, with timestamp, session id, model, input tokens, output tokens, and speed (tok/s).
+- **Recent** (tab only): the last several interactions, one row each, with local time, workspace folder, session id, model and effort, input tokens, output tokens, and speed (tok/s).
+  Cells are abbreviated to keep the columns tight: the time drops the year, the workspace shows only its innermost folder, and a long model id is cut short.
+  Hover any of them for the full value.
 - **Workspace** (tab only): the session id and the full directory path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
 
 A few things to know about the numbers:
 
 - tok/s is `output tokens / total request time`, summing each API call's wall-clock `duration_ms` (server time plus network and any retries). Tool-execution gaps and time you spend typing or queueing between requests are **not** counted.
 - Output tokens, and therefore tok/s, include both thinking and visible text. Claude Code reports a single output count, so the two cannot be separated here.
-- One "interaction" sums all API calls of a single prompt (`prompt.id`), including tool-call steps and any sub-agents the prompt spawns.
+- One "interaction" sums a single prompt's (`prompt.id`) API calls **to one model**, including tool-call steps and any sub-agents that run on that model.
+  Claude Code stamps every request it makes while a prompt is in flight with that prompt's id, including ones it routes to a different model, so the Haiku call that names a new session becomes its own interaction instead of adding its tokens to your turn.
 - Stats are **global** across all Claude Code sessions and windows, not filtered to the current workspace.
 - Interaction times show the wall-clock time **in your local timezone** plus a live "x ago" hint that refreshes on its own, so it stays accurate instead of freezing at the value from the last interaction.
 
