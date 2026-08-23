@@ -118,21 +118,24 @@ export function utcDayKey(ms: number): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Cost (USD) summed over the day, the week (from Monday), and the month. */
+/** Cost (USD) summed over the day, the week (from Monday), the month, and the
+ *  whole of the preceding calendar month. */
 export interface CostWindows {
   today: number;
   week: number;
   month: number;
+  lastMonth: number;
 }
 
-/** Sum a daily-cost ledger into Today / This Week (Monday-start) / This Month,
- *  all in UTC. "YYYY-MM-DD" keys order lexically, so range checks are plain
- *  string comparisons. */
+/** Sum a daily-cost ledger into Today / This Week (Monday-start) / This Month /
+ *  Last Month, all in UTC. "YYYY-MM-DD" keys order lexically, so range checks
+ *  are plain string comparisons. Last Month is the only closed window: bounded
+ *  above by the first of this month, it stops growing once the month turns. */
 export function costWindows(
   daily: Record<string, number> | undefined,
   nowMs: number
 ): CostWindows {
-  const out: CostWindows = { today: 0, week: 0, month: 0 };
+  const out: CostWindows = { today: 0, week: 0, month: 0, lastMonth: 0 };
   if (!daily) return out;
   const now = new Date(nowMs);
   const todayKey = utcDayKey(nowMs);
@@ -143,13 +146,19 @@ export function costWindows(
     now.getUTCDate() - dow
   );
   const mondayKey = utcDayKey(mondayMs);
-  const monthKey = `${now.getUTCFullYear()}-${String(
-    now.getUTCMonth() + 1
-  ).padStart(2, "0")}-01`;
+  const monthKey = utcDayKey(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)
+  );
+  // Month index -1 rolls back into the previous December, so January needs no
+  // special case.
+  const lastMonthKey = utcDayKey(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)
+  );
   for (const [key, cost] of Object.entries(daily)) {
     if (key === todayKey) out.today += cost;
     if (key >= mondayKey) out.week += cost;
     if (key >= monthKey) out.month += cost;
+    else if (key >= lastMonthKey) out.lastMonth += cost;
   }
   return out;
 }

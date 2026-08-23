@@ -11,6 +11,15 @@ follows [Semantic Versioning](https://semver.org).
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
+## 1.7.1 - 2026-08-23
+
+- Added a Last Month total to the Cost section.
+- The Recent interactions table drops the shared `claude-` prefix from model ids
+  and gives the freed width to the Workspace column.
+- The Workspace section shows a longer directory path before ellipsizing.
+- The hover's timestamp moved below the tok/s headline, so a long model id no
+  longer widens the popup.
+
 ## 1.7.0 - 2026-08-16
 
 - Interactions are now counted per model. A request Claude Code routes to a

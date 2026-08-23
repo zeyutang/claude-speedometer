@@ -50,9 +50,14 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
   const cw = store.getCostWindows(now);
 
   const L: string[] = [];
-  L.push(`**Latest Interaction** · ${fmtWhen(v.lastMs, now)}`);
+  L.push("**Latest Interaction**");
   L.push("");
   L.push(`## ${fmtTokPerSec(v.totalTokPerSec)} tok/s`);
+  // The timestamp sits on its own line below the headline rather than beside
+  // the title: as plain body text it wraps if it must, whereas on the title
+  // line it set a minimum width that stretched the whole popup.
+  L.push("");
+  L.push(fmtWhen(v.lastMs, now));
 
   const sections: Section[] = [
     {

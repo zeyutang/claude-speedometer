@@ -38,10 +38,12 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
 - **Speed**: output tok/s (output tokens / total request time).
 - **Tokens**: input, output, cache-write, cache-read. "Output" counts thinking and visible text together; Claude Code's telemetry does not report them separately.
 - **Timing**: total request time and API request count.
-- **Cost (estimated)**: spend for the current interaction, today, this week (from Monday), and this month. Day/week/month windows are bucketed by **UTC** calendar day; the totals accrue from when telemetry was enabled and survive turn pruning. See [where the cost figures come from](#where-the-cost-figures-come-from) for how the dollar amounts are computed and what they mean.
+- **Cost (estimated)**: spend for the current interaction, today, this week (from Monday), this month, and last month.
+  The windows are bucketed by **UTC** calendar day, and the totals accrue from when telemetry was enabled and survive turn pruning.
+  See [where the cost figures come from](#where-the-cost-figures-come-from) for how the dollar amounts are computed and what they mean.
 - **Model**: model, plus **reasoning effort** (only when the model supports it) and **Fast mode** (only when it is on).
 - **Recent** (tab only): the last several interactions, one row each, with local time, workspace folder, session id, model and effort, input tokens, output tokens, and speed (tok/s).
-  Cells are abbreviated to keep the columns tight: the time drops the year, the workspace shows only its innermost folder, and a long model id is cut short.
+  Cells are abbreviated to keep the columns tight: the time drops the year, the workspace shows only its innermost folder, and the model id drops the `claude-` prefix every id shares (a long one is also cut short).
   Hover any of them for the full value.
 - **Workspace** (tab only): the session id and the full directory path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
 

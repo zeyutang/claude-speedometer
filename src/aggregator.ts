@@ -18,9 +18,11 @@ import { resolveWorkspace } from "./workspace";
 // still applies, so the effective history is whichever limit is reached first.
 const MAX_TURNS = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-// How many days of the daily-cost ledger to keep. Covers This Month (up to 31
-// days) with headroom; the ledger is a handful of bytes per day regardless.
-const COST_LEDGER_DAYS = 70;
+// How many days of the daily-cost ledger to keep. Last Month reaches furthest
+// back of the windows shown: its first day sits up to 61 days behind today (a
+// 31-day previous month, viewed on the 31st of a 31-day one), so this leaves a
+// full month of headroom. The ledger is a handful of bytes per day regardless.
+const COST_LEDGER_DAYS = 95;
 
 /** Parse an ISO-8601 timestamp to epoch ms, or undefined if unparseable. */
 function isoMs(v: string | undefined): number | undefined {

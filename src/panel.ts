@@ -22,6 +22,13 @@ import { CostWindows, Turn, TurnView, viewOf } from "./types";
 // drives the refresh rather than client-side JS.
 const REFRESH_MS = 10_000;
 
+// Longest workspace path the Workspace section prints before ellipsizing from
+// the left. Budgeted against the body's 672px content box: the key column
+// collapses to the word "Directory" (~63px) plus the grid's 16px gap, leaving
+// ~590px, which at the ~6.5px a lowercase path averages per character holds
+// well past 80.
+const DIR_MAX_LEN = 80;
+
 export class StatsPanel {
   private panel: vscode.WebviewPanel | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -105,10 +112,10 @@ export class StatsPanel {
         const rv = viewOf(t, now);
         const session = rv.sessionId ? rv.sessionId.slice(0, 8) : "-";
         const model = rv.model ?? "-";
-        // Model column reads e.g. "...opus-4-8 | max": abbreviate the "claude-"
-        // prefix to "..." and append the lowercased effort level. The title
-        // keeps the full, unabbreviated id (with effort) for hover.
-        const modelShort = model.replace(/^claude-/, "...");
+        // Model column reads e.g. "opus-4-8 | max": drop the "claude-" prefix,
+        // which every id shares and so distinguishes nothing, and append the
+        // lowercased effort level. The title keeps the full id for hover.
+        const modelShort = model.replace(/^claude-/, "");
         const effort = rv.effort ? rv.effort.toLowerCase() : "";
         const modelCell = effort ? `${modelShort} | ${effort}` : modelShort;
         const modelTitle = effort ? `${model} | ${effort}` : model;
@@ -172,6 +179,7 @@ export class StatsPanel {
         ["Today", fmtCost(cost.today)],
         ["This Week", fmtCost(cost.week)],
         ["This Month", fmtCost(cost.month)],
+        ["Last Month", fmtCost(cost.lastMonth)],
       ])}
 
       <hr />
@@ -194,7 +202,7 @@ export class StatsPanel {
       ${kv([
         ["Session", v.sessionId ? v.sessionId.slice(0, 8) : "-"],
         v.workspace
-          ? ["Directory", ellipsizeLeft(v.workspace, 48), v.workspace]
+          ? ["Directory", ellipsizeLeft(v.workspace, DIR_MAX_LEN), v.workspace]
           : ["Directory", "-"],
       ])}
 
@@ -207,18 +215,18 @@ export class StatsPanel {
                content plus one shared 12px gutter (the cells' padding-right), so
                the columns sit as close together as their contents allow and a
                full row's gaps are even. Worst cases, measured at this table's
-               12px type: the year-less "MM-DD HH:MM:SS" stamp, a 20-character
-               folder name, an 8-char session, a "...haiku-4-5 | medium"-shaped
+               12px type: the year-less "MM-DD HH:MM:SS" stamp, a 22-character
+               folder name, an 8-char session, a "haiku-4-5 | medium"-shaped
                model cell, a seven-digit token count ("9,999,999", well past what
                one interaction reaches), and a speed below 1000 ("999.99 tok/s").
                The two variable-length cells run over on their rare long values,
                ellipsizing in CSS with the full text on hover: a dated model id
-               ("...haiku-4-5-20251001 | medium") and an unusually long folder
+               ("haiku-4-5-20251001 | medium") and an unusually long folder
                name. -->
           <col style="width:15.5%" />
-          <col style="width:21%" />
+          <col style="width:23.5%" />
           <col style="width:11%" />
-          <col style="width:20.25%" />
+          <col style="width:17.75%" />
           <col style="width:10.75%" />
           <col style="width:10.75%" />
           <col style="width:10.75%" />
@@ -243,9 +251,9 @@ export class StatsPanel {
       time. Stats are global across all Claude Code sessions (each tracked
       separately, so concurrent sessions don't cut each other's turns short),
       not filtered to this VS Code window. Cost totals (Today, This Week from
-      Monday, This Month) are estimates bucketed by UTC day (interaction times
-      above are shown in local time) and accrue only from when telemetry was
-      enabled.</p>`;
+      Monday, This Month, Last Month) are estimates bucketed by UTC day
+      (interaction times above are shown in local time) and accrue only from
+      when telemetry was enabled.</p>`;
   }
 }
 
