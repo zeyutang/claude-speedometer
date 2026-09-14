@@ -11,6 +11,16 @@ follows [Semantic Versioning](https://semver.org).
   decode-only speed, exact per-turn boundaries, and excluding failed or retried
   calls and tool time from the throughput.
 
+## 1.8.0 - 2026-09-14
+
+- Interactions on models Claude Code cannot price are no longer costed at Claude's rate, which made a session on another provider report a wrong figure that looked ordinary.
+- Added `claudeSpeedometer.modelPricing`, where you can set per-million-token rates for a provider's models, keyed by base URL or by model id.
+  An interaction with no matching rate reads as "unpriced" rather than as free, and any total that leaves one out is marked with a ≥.
+- Cost is now derived when it is displayed, so correcting a rate also corrects the interactions already recorded.
+- The Model section shows the endpoint for an interaction Claude Code could not price itself.
+- Added `claudeSpeedometer.billingContextProvider`, for setups that inject the base URL straight into the Claude Code process.
+  An extension in the same window can supply the endpoint and its rates through a `getBillingContext()` export.
+
 ## 1.7.1 - 2026-08-23
 
 - Added a Last Month total to the Cost section.

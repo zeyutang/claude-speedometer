@@ -1,4 +1,5 @@
 import { Aggregator } from "./aggregator";
+import { BillingSource, NO_BILLING_SOURCE } from "./pricing";
 import { OtlpReceiver } from "./receiver";
 import { SpeedStore } from "./store";
 
@@ -22,8 +23,17 @@ export class LeaderManager {
     private readonly store: SpeedStore,
     private readonly port: number,
     private readonly retentionDays = 7,
+    private readonly billing: BillingSource = NO_BILLING_SOURCE,
     private readonly onRoleChange?: (isLeader: boolean) => void
   ) {}
+
+  /** Re-publish the current snapshot without waiting for an event. The daily
+   *  cost ledger is derived from the price table, so a change to the rates has
+   *  to be folded in and shared out on its own. A no-op in a follower window,
+   *  which owns no aggregator. */
+  republish(): void {
+    if (this.agg) this.store.write(this.agg.snapshot());
+  }
 
   isLeader(): boolean {
     return this.leader;
@@ -50,7 +60,7 @@ export class LeaderManager {
   private async tryBecomeLeader(): Promise<void> {
     if (this.disposed || this.leader) return;
 
-    const agg = new Aggregator(this.retentionDays);
+    const agg = new Aggregator(this.billing, this.retentionDays);
     // Seed from shared state so history survives a handover.
     const seed = this.store.getSnapshot();
     if (seed) agg.load(seed);

@@ -70,6 +70,52 @@
           "type": "number",
           "default": 7,
           "description": "Discard interactions older than this many days from the shared history file (~/.claude-speedometer/state.json)."
+        },
+        "claudeSpeedometer.modelPricing": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Rates in USD per million tokens for models Claude Code cannot price, which it otherwise costs at its own default model's rate. `byEndpoint` maps a base URL to the models served there, with `\"*\"` as that endpoint's default. `byModel` applies only when the base URL cannot be resolved. Each rate needs all four figures. An interaction with no matching rate reads as \"unpriced\" rather than as free.",
+          "additionalProperties": false,
+          "properties": {
+            "byEndpoint": {
+              "type": "object",
+              "description": "Base URL, then model id, then rate.",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": ["input", "output", "cacheRead", "cacheWrite"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "input": { "type": "number", "minimum": 0 },
+                    "output": { "type": "number", "minimum": 0 },
+                    "cacheRead": { "type": "number", "minimum": 0 },
+                    "cacheWrite": { "type": "number", "minimum": 0 }
+                  }
+                }
+              }
+            },
+            "byModel": {
+              "type": "object",
+              "description": "Model id, then rate.",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["input", "output", "cacheRead", "cacheWrite"],
+                "additionalProperties": false,
+                "properties": {
+                  "input": { "type": "number", "minimum": 0 },
+                  "output": { "type": "number", "minimum": 0 },
+                  "cacheRead": { "type": "number", "minimum": 0 },
+                  "cacheWrite": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        "claudeSpeedometer.billingContextProvider": {
+          "type": "string",
+          "default": "auto",
+          "markdownDescription": "Which extension to ask where Claude Code is sending requests. `auto` takes the first extension in this window that exports a `getBillingContext()` function and reports itself armed, `off` asks none, and any other value pins a single extension id."
         }
       }
     }

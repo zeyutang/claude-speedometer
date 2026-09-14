@@ -1,3 +1,6 @@
+import { PricedCost } from "./pricing";
+import { CostWindow } from "./types";
+
 export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString("en-US");
 }
@@ -47,6 +50,26 @@ export function fmtTime(ms: number): string {
   if (h > 0 || m > 0) parts.push(`${m}min`);
   parts.push(`${s}sec`);
   return parts.join(" ");
+}
+
+/** A turn's cost, or the word "unpriced" when nothing could price it. An
+ *  unpriced turn must never render as "$0.00": that reads as a free turn, which
+ *  is the invisible error this whole path exists to avoid. */
+export function fmtPricedCost(c: PricedCost): string {
+  return c.state === "unpriced" ? "unpriced" : fmtCost(c.usd);
+}
+
+/** A window total, prefixed with the greater-or-equal sign when it leaves out
+ *  interactions nothing could price. */
+export function fmtCostWindow(w: CostWindow): string {
+  return w.lowerBound ? `\u2265 ${fmtCost(w.usd)}` : fmtCost(w.usd);
+}
+
+/** A base URL as shown in the UI: the scheme carries no information here and
+ *  costs a dozen columns in a tight two-column layout. */
+export function fmtEndpoint(endpoint: string | undefined): string {
+  if (!endpoint) return "unresolved";
+  return endpoint.replace(/^https?:\/\//, "");
 }
 
 export function fmtCost(usd: number): string {

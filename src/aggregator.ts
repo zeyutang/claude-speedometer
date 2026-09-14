@@ -10,6 +10,12 @@ import {
   turnKey,
   utcDayKey,
 } from "./types";
+import {
+  BillingSource,
+  NO_BILLING_SOURCE,
+  costBasisFor,
+  priceTurn,
+} from "./pricing";
 import { resolveWorkspace } from "./workspace";
 
 // Cap on retained turns. The whole set is serialized into state.json on every
@@ -71,8 +77,13 @@ export class Aggregator extends EventEmitter {
   // (deduped via seenRequests) and persisted, so day/week/month totals survive
   // turn pruning.
   private dailyCost = new Map<string, number>();
+  // UTC days holding at least one turn nothing could price. Those turns bank no
+  // dollars, so without this marker a day of unpriced work would read as a free
+  // one instead of as an understated one.
+  private unpricedDays = new Set<string>();
 
   constructor(
+    private readonly billing: BillingSource = NO_BILLING_SOURCE,
     private readonly retentionDays = 7,
     private readonly settleMs = 3000
   ) {
@@ -107,7 +118,36 @@ export class Aggregator extends EventEmitter {
     const ts =
       eventTimeMs ?? isoMs(str(attrs, "event.timestamp")) ?? Date.now();
 
-    const turn = this.ensureTurn(promptId, attrs, ts);
+    // Resolved before the row exists, because a project-scoped Claude Code
+    // settings file is one of the inputs to the row's cost basis and the project
+    // directory is how that file is found. Hits are cached, so after a session's
+    // first event this is a map lookup.
+    const sessionId = str(attrs, "session.id");
+    const workspace = sessionId ? resolveWorkspace(sessionId) : undefined;
+
+    const turn = this.ensureTurn(promptId, attrs, ts, workspace);
+
+    if (!turn.workspace && workspace) {
+      // The row was classified before its session's transcript revealed the
+      // project directory, so it was classified without whatever base URL that
+      // project's own settings file sets. Re-derive now that the file can be
+      // found.
+      //
+      // Only a move to "local" is applied. Going the other way would leave the
+      // row reporting an upstream figure that is missing what its earlier
+      // requests reported and had dropped, and a quietly undercounted total is
+      // the failure this path exists to prevent. Staying local costs the row
+      // from its complete token counts, or marks it unpriced.
+      turn.workspace = workspace;
+      const ctx = this.billing.context(workspace);
+      if (costBasisFor(turn.model, ctx) === "local") {
+        turn.endpoint = ctx.endpoint;
+        if (turn.costBasis !== "local") {
+          turn.costBasis = "local";
+          turn.costUsd = 0;
+        }
+      }
+    }
 
     const duration = num(attrs, "duration_ms") ?? 0;
 
@@ -117,7 +157,10 @@ export class Aggregator extends EventEmitter {
     turn.cacheReadTokens += num(attrs, "cache_read_tokens") ?? 0;
     turn.cacheCreationTokens += num(attrs, "cache_creation_tokens") ?? 0;
     turn.totalDurationMs += duration;
-    turn.costUsd += num(attrs, "cost_usd") ?? 0;
+    // Only a first-party figure is banked. Anywhere else `cost_usd` is Claude
+    // Code's guess at Anthropic's rate for a model it does not recognize, so the
+    // row keeps its token counts and is priced from them at render time.
+    if (turn.costBasis !== "local") turn.costUsd += num(attrs, "cost_usd") ?? 0;
     // Events can arrive out of order within a batch: keep the extremes.
     if (ts > turn.lastMs) turn.lastMs = ts;
     if (ts < turn.startMs) turn.startMs = ts;
@@ -127,13 +170,9 @@ export class Aggregator extends EventEmitter {
     // different row.
     const speed = str(attrs, "speed");
     if (speed) turn.speed = speed;
-    const sessionId = str(attrs, "session.id");
     if (sessionId) turn.sessionId = sessionId;
     const terminal = str(attrs, "terminal.type");
     if (terminal) turn.terminalType = terminal;
-    if (!turn.workspace && turn.sessionId) {
-      turn.workspace = resolveWorkspace(turn.sessionId);
-    }
 
     // Within a session, prompts are serial: a new prompt.id means this session's
     // previous prompt finished -> display it. Events from other sessions don't
@@ -154,12 +193,21 @@ export class Aggregator extends EventEmitter {
    *  effort it reports form part of the row's key, so a request Claude Code
    *  routes to another model under the same prompt.id opens its own row rather
    *  than landing in (and relabelling) the user's turn. */
-  private ensureTurn(promptId: string, attrs: Attrs, nowMs: number): Turn {
+  private ensureTurn(
+    promptId: string,
+    attrs: Attrs,
+    nowMs: number,
+    workspace: string | undefined
+  ): Turn {
     const model = str(attrs, "model");
     const effort = str(attrs, "effort");
     const key = turnKey({ promptId, model, effort });
     let t = this.turns.get(key);
     if (!t) {
+      // Where the requests are going is read once, here, and stamped on: it
+      // comes from configuration the user can change at any moment, so deriving
+      // it later would re-attribute this row the next time they switched.
+      const ctx = this.billing.context(workspace);
       t = {
         promptId,
         startMs: nowMs,
@@ -171,10 +219,13 @@ export class Aggregator extends EventEmitter {
         cacheCreationTokens: 0,
         totalDurationMs: 0,
         costUsd: 0,
+        endpoint: ctx.endpoint,
+        costBasis: costBasisFor(model, ctx),
         model,
         effort,
         sessionId: str(attrs, "session.id"),
         terminalType: str(attrs, "terminal.type"),
+        workspace,
       };
       this.turns.set(key, t);
     }
@@ -217,21 +268,69 @@ export class Aggregator extends EventEmitter {
 
   /**
    * Fold the retained turns into the daily ledger, banking each UTC day's summed
-   * cost. Uses max(banked, sum-of-retained-turns-that-day) so that once a day's
-   * turns start aging out of the retained set, its already-banked total is
-   * preserved rather than shrinking. Recomputing from turns (instead of adding
-   * per event) also self-heals: the ledger fills in immediately from existing
-   * history, e.g. after upgrading from a version that had no ledger.
+   * cost. Cost is derived here rather than at ingest so that a later edit to the
+   * price table reaches history instead of only new turns.
+   *
+   * Days lying wholly inside the retained history are recomputed outright, which
+   * lets a corrected rate lower a day as well as raise it. Pruning is a rolling
+   * age cutoff plus an oldest-first size cap, so the oldest retained turn's own
+   * day is the last one that may be missing turns and every day after it is
+   * complete. Earlier days can only rise, via max(banked, sum): their turns are
+   * gone and the banked figure is the only record of them left. Recomputing from
+   * turns rather than adding per event also self-heals, filling the ledger in
+   * from existing history after an upgrade or a leadership handover.
    */
   private bankTurnsIntoLedger(): void {
+    const prices = this.billing.prices();
     const fromTurns = new Map<string, number>();
+    const unpriced = new Set<string>();
+    let oldestMs = Infinity;
     for (const t of this.turns.values()) {
-      if (!t.costUsd) continue;
+      if (t.lastMs < oldestMs) oldestMs = t.lastMs;
       const key = utcDayKey(t.lastMs);
-      fromTurns.set(key, (fromTurns.get(key) ?? 0) + t.costUsd);
+      const cost = priceTurn(t, prices);
+      if (cost.state === "unpriced") {
+        // A turn that consumed no tokens costs nothing under any rate, so it is
+        // no reason to call the day's total a lower bound.
+        const tokens =
+          t.inputTokens +
+          t.outputTokens +
+          t.cacheReadTokens +
+          t.cacheCreationTokens;
+        if (tokens > 0) unpriced.add(key);
+        continue;
+      }
+      if (cost.usd) fromTurns.set(key, (fromTurns.get(key) ?? 0) + cost.usd);
     }
-    for (const [key, sum] of fromTurns) {
-      if (sum > (this.dailyCost.get(key) ?? 0)) this.dailyCost.set(key, sum);
+    // Bounded by the retention cutoff as well as by the oldest retained turn,
+    // because two turns outlive pruning by age (the displayed row and any still
+    // running). Were one of them the oldest, the turn-derived bound alone would
+    // call days complete whose own turns are long gone and zero them out.
+    const cutoffDay = utcDayKey(
+      Date.now() - this.retentionDays * DAY_MS + DAY_MS
+    );
+    let exactFrom: string | undefined;
+    if (Number.isFinite(oldestMs)) {
+      const oldestDay = utcDayKey(oldestMs + DAY_MS);
+      exactFrom = oldestDay > cutoffDay ? oldestDay : cutoffDay;
+    }
+    const days = new Set([
+      ...fromTurns.keys(),
+      ...unpriced,
+      ...this.dailyCost.keys(),
+      ...this.unpricedDays,
+    ]);
+    for (const key of days) {
+      const sum = fromTurns.get(key) ?? 0;
+      if (exactFrom !== undefined && key >= exactFrom) {
+        if (sum > 0) this.dailyCost.set(key, sum);
+        else this.dailyCost.delete(key);
+        if (unpriced.has(key)) this.unpricedDays.add(key);
+        else this.unpricedDays.delete(key);
+      } else {
+        if (sum > (this.dailyCost.get(key) ?? 0)) this.dailyCost.set(key, sum);
+        if (unpriced.has(key)) this.unpricedDays.add(key);
+      }
     }
   }
 
@@ -240,6 +339,9 @@ export class Aggregator extends EventEmitter {
     const cutoffKey = utcDayKey(Date.now() - COST_LEDGER_DAYS * DAY_MS);
     for (const key of this.dailyCost.keys()) {
       if (key < cutoffKey) this.dailyCost.delete(key);
+    }
+    for (const key of this.unpricedDays) {
+      if (key < cutoffKey) this.unpricedDays.delete(key);
     }
   }
 
@@ -299,11 +401,12 @@ export class Aggregator extends EventEmitter {
     this.bankTurnsIntoLedger();
     this.pruneDailyCost();
     return {
-      version: 1,
+      version: 2,
       updatedMs: Date.now(),
       displayId: this.displayId,
       turns: [...this.turns.values()],
       dailyCost: Object.fromEntries(this.dailyCost),
+      unpricedDays: [...this.unpricedDays],
     };
   }
 
@@ -319,6 +422,7 @@ export class Aggregator extends EventEmitter {
     this.displayId = shown ? turnKey(shown) : undefined;
     this.runningBySession.clear();
     this.dailyCost = new Map(Object.entries(snap.dailyCost ?? {}));
+    this.unpricedDays = new Set(snap.unpricedDays ?? []);
     // Seed the ledger from the retained turns too, so an upgrade from a version
     // without the ledger (or a handover) shows history immediately.
     this.bankTurnsIntoLedger();

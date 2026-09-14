@@ -1,9 +1,12 @@
 import * as vscode from "vscode";
+import { BillingService } from "./billing";
 import { SpeedStore } from "./store";
 import {
-  fmtCost,
+  fmtCostWindow,
   fmtEffort,
+  fmtEndpoint,
   fmtInt,
+  fmtPricedCost,
   fmtTime,
   fmtTokPerSec,
   fmtWhen,
@@ -26,7 +29,10 @@ const MAX_VALUE_WIDTH = 14; // wider values (e.g. a dated model id) overflow the
  * above the status bar (lower-right). Sections render as monospace code blocks
  * sharing one column layout, so values align across every section.
  */
-export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
+export function buildTooltip(
+  store: SpeedStore,
+  billing: BillingService
+): vscode.MarkdownString {
   const md = new vscode.MarkdownString();
   // A trusted MarkdownString that carries interactive command links makes VS Code
   // render the status-bar hover as an interactive popup: the cursor can move into
@@ -46,7 +52,7 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
     return md;
   }
 
-  const v = viewOf(latest, now);
+  const v = viewOf(latest, now, billing.prices());
   const cw = store.getCostWindows(now);
 
   const L: string[] = [];
@@ -64,6 +70,11 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
       title: "Model",
       rows: [
         ["Model", v.model ?? "-"],
+        // Endpoint row appears only for a turn Claude Code could not price
+        // itself, where which endpoint served it is what decides the cost below.
+        ...(v.costBasis === "local"
+          ? [["Endpoint", fmtEndpoint(v.endpoint)] as Row]
+          : []),
         // Effort row appears only when the model reports an effort setting.
         ...(v.effort ? [["Effort", fmtEffort(v.effort)] as Row] : []),
         // Fast Mode row appears only when the model supports it and it is on.
@@ -89,8 +100,8 @@ export function buildTooltip(store: SpeedStore): vscode.MarkdownString {
     {
       title: "Cost (estimated)",
       rows: [
-        ["Latest Interaction", fmtCost(v.costUsd)],
-        ["Today", fmtCost(cw.today)],
+        ["Latest Interaction", fmtPricedCost(v.cost)],
+        ["Today", fmtCostWindow(cw.today)],
       ],
     },
   ];

@@ -1,9 +1,12 @@
 import * as vscode from "vscode";
+import { BillingService } from "./billing";
 import { SpeedStore } from "./store";
 import {
-  fmtCost,
+  fmtCostWindow,
   fmtEffort,
+  fmtEndpoint,
   fmtInt,
+  fmtPricedCost,
   fmtTime,
   fmtTimestamp,
   fmtTimestampShort,
@@ -11,7 +14,7 @@ import {
   fmtWhen,
   isFastModeOn,
 } from "./format";
-import { CostWindows, Turn, TurnView, viewOf } from "./types";
+import { CostWindow, CostWindows, Turn, TurnView, viewOf } from "./types";
 
 /**
  * The stats tab opened by clicking the bolt. Opens in the active editor group,
@@ -35,6 +38,7 @@ export class StatsPanel {
 
   constructor(
     private readonly store: SpeedStore,
+    private readonly billing: BillingService,
     private readonly onVisibilityChange: (visible: boolean) => void
   ) {
     this.store.on("update", () => {
@@ -72,6 +76,12 @@ export class StatsPanel {
     this.panel = undefined;
   }
 
+  /** Redraw outside the usual triggers, for a change (an edited price table)
+   *  that alters what is rendered without altering the shared state. */
+  refresh(): void {
+    if (this.panel) this.panel.webview.html = this.render();
+  }
+
   private stopTimer(): void {
     if (this.timer) {
       clearInterval(this.timer);
@@ -84,8 +94,9 @@ export class StatsPanel {
     const latest = this.store.getLatest();
     const recent = this.store.getRecent(20);
     const cost = this.store.getCostWindows(now);
+    const prices = this.billing.prices();
     const body = latest
-      ? this.renderTurn(viewOf(latest, now), recent, now, cost)
+      ? this.renderTurn(viewOf(latest, now, prices), recent, now, cost)
       : this.renderEmpty();
     return wrapHtml(body);
   }
@@ -175,17 +186,21 @@ export class StatsPanel {
       <hr />
       <h3>Cost (estimated, UTC-bucketed)</h3>
       ${kv([
-        ["Latest Interaction", fmtCost(v.costUsd)],
-        ["Today", fmtCost(cost.today)],
-        ["This Week", fmtCost(cost.week)],
-        ["This Month", fmtCost(cost.month)],
-        ["Last Month", fmtCost(cost.lastMonth)],
+        latestCostRow(v),
+        windowRow("Today", cost.today),
+        windowRow("This Week", cost.week),
+        windowRow("This Month", cost.month),
+        windowRow("Last Month", cost.lastMonth),
       ])}
 
       <hr />
       <h3>Model</h3>
       ${kv([
         ["Model", v.model ?? "-"],
+        // Endpoint row appears only for a turn Claude Code could not price
+        // itself, where which endpoint served it is what decides the figure
+        // above. A first-party turn has nothing to disambiguate.
+        ...(v.costBasis === "local" ? [endpointRow(v)] : []),
         // Effort row appears only when the model reports an effort setting;
         // models that don't support effort configuration omit the attribute.
         ...(v.effort
@@ -253,11 +268,65 @@ export class StatsPanel {
       not filtered to this VS Code window. Cost totals (Today, This Week from
       Monday, This Month, Last Month) are estimates bucketed by UTC day
       (interaction times above are shown in local time) and accrue only from
-      when telemetry was enabled.</p>`;
+      when telemetry was enabled. An interaction on a model Claude Code does not
+      recognize is costed from <code>claudeSpeedometer.modelPricing</code>
+      rather than from Claude Code's own figure, which would be its default
+      model's rate. With no matching rate it reads as "unpriced", and any total
+      containing one is marked with a \u2265 instead of counting it as free.</p>`;
   }
 }
 
-function kv(rows: Array<[string, string] | [string, string, string]>): string {
+type KvRow = [string, string] | [string, string, string];
+
+const UNRESOLVED_ENDPOINT_TITLE =
+  "Claude Code's base URL could not be read from any settings file or from " +
+  "this window's environment. Set claudeSpeedometer.modelPricing.byModel to " +
+  "price these interactions.";
+
+const LOWER_BOUND_TITLE =
+  "Lower bound: this window contains interactions with no configured rate, " +
+  "which contribute nothing to the total.";
+
+/** The latest turn's cost, with hover text saying where the number came from
+ *  (or why there is none), so a recomputed or missing figure explains itself. */
+function latestCostRow(v: TurnView): KvRow {
+  const label = "Latest Interaction";
+  const value = fmtPricedCost(v.cost);
+  const where = v.endpoint ? fmtEndpoint(v.endpoint) : "an unresolved endpoint";
+  if (v.cost.state === "recomputed") {
+    return [
+      label,
+      value,
+      `Recomputed from claudeSpeedometer.modelPricing: Claude Code prices ` +
+        `${v.model ?? "this model"} at ${where} against its own default ` +
+        `model's rate, so its figure is discarded.`,
+    ];
+  }
+  if (v.cost.state === "unpriced") {
+    return [
+      label,
+      value,
+      `No rate configured for ${v.model ?? "this model"} at ${where}, and ` +
+        `Claude Code's own figure is a guess at Anthropic's rate rather than ` +
+        `what this interaction cost.`,
+    ];
+  }
+  return [label, value];
+}
+
+function windowRow(label: string, w: CostWindow): KvRow {
+  const value = fmtCostWindow(w);
+  return w.lowerBound ? [label, value, LOWER_BOUND_TITLE] : [label, value];
+}
+
+/** The base URL, hovering to the full form the display drops the scheme from,
+ *  or to an explanation when there was none to resolve. */
+function endpointRow(v: TurnView): KvRow {
+  const title = v.endpoint ?? UNRESOLVED_ENDPOINT_TITLE;
+  return ["Endpoint", fmtEndpoint(v.endpoint), title];
+}
+
+function kv(rows: KvRow[]): string {
   return `<div class="kv">${rows
     .map(([k, val, title]) => {
       const t = title ? ` title="${escapeHtml(title)}"` : "";
