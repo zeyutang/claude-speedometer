@@ -3,7 +3,7 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
-## 1.8.0 - 2026-09-15
+## 1.8.1 - 2026-09-15
 
 - Interactions on models Claude Code cannot price are no longer costed at Claude's rate, which made a session on another provider report a wrong figure that looked ordinary.
 - Added `claudeSpeedometer.providers`, where you can set per-million-token rates for a provider's models, nested provider then model.
