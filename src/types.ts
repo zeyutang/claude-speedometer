@@ -131,9 +131,9 @@ export interface Snapshot {
   // events arrive and kept beyond the per-turn retention, so Today/Week/Month
   // totals stay accurate even after old turns are pruned.
   dailyCost?: Record<string, number>;
-  // UTC days ("YYYY-MM-DD") whose banked total leaves out at least one turn that
-  // had no rate to price it. Such a turn contributes nothing, so the day's
-  // figure, and any window containing it, is a lower bound rather than a total.
+  // UTC days ("YYYY-MM-DD") holding at least one turn that had no rate to price
+  // it. Nothing retained can say the day's figure covers that turn, so the day,
+  // and any window containing it, reads as a lower bound rather than a total.
   unpricedDays?: string[];
 }
 
@@ -146,9 +146,9 @@ export function utcDayKey(ms: number): string {
   return `${y}-${m}-${day}`;
 }
 
-/** One window's spend. `lowerBound` marks a total that is missing the cost of
- *  at least one turn nothing could price, so it understates by an unknown
- *  amount rather than being merely approximate. */
+/** One window's spend. `lowerBound` marks a total that is not known to cover
+ *  every turn in the window, at least one of them having no rate to price it, so
+ *  it may understate by an unknown amount rather than being merely approximate. */
 export interface CostWindow {
   usd: number;
   lowerBound: boolean;

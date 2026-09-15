@@ -78,9 +78,12 @@ export class Aggregator extends EventEmitter {
   // (deduped via seenRequests) and persisted, so day/week/month totals survive
   // turn pruning.
   private dailyCost = new Map<string, number>();
-  // UTC days holding at least one turn nothing could price. Those turns bank no
-  // dollars, so without this marker a day of unpriced work would read as a free
-  // one instead of as an understated one.
+  // UTC days holding at least one turn nothing can currently price. Such a turn
+  // adds nothing to the day's sum, so without this marker a day of unpriced work
+  // would read as a free one instead of as a possibly understated one. The
+  // marker is deliberately conservative: a day that banked the turn's cost while
+  // its rate still resolved carries it still, and is marked all the same, since
+  // nothing retained can now vouch for the figure being complete.
   private unpricedDays = new Set<string>();
 
   constructor(
@@ -274,14 +277,29 @@ export class Aggregator extends EventEmitter {
    * cost. Cost is derived here rather than at ingest so that a later edit to the
    * price table reaches history instead of only new turns.
    *
-   * Days lying wholly inside the retained history are recomputed outright, which
-   * lets a corrected rate lower a day as well as raise it. Pruning is a rolling
-   * age cutoff plus an oldest-first size cap, so the oldest retained turn's own
-   * day is the last one that may be missing turns and every day after it is
-   * complete. Earlier days can only rise, via max(banked, sum): their turns are
-   * gone and the banked figure is the only record of them left. Recomputing from
-   * turns rather than adding per event also self-heals, filling the ledger in
-   * from existing history after an upgrade or a leadership handover.
+   * A day is recomputed outright only where `sum` is the whole truth about it,
+   * which takes two things. It has to lie wholly inside the retained history:
+   * pruning is a rolling age cutoff plus an oldest-first size cap, so the oldest
+   * retained turn's own day is the last one that may be missing turns and every
+   * day after it is complete. And every one of its turns has to have priced,
+   * because an unpriced turn is absent from `sum` rather than free, so a day
+   * holding one has only a partial figure to offer. Where both hold, the day is
+   * set from `sum`, which is what lets a corrected rate lower a day as well as
+   * raise it.
+   *
+   * Every other day can only rise, via max(banked, sum). For a day whose turns
+   * are gone that is because the banked figure is the only record of them left.
+   * For a day holding an unpriced turn it is because losing a rate says nothing
+   * about what was spent: recomputing there would delete dollars that were
+   * banked when the rate was still resolvable, which is how a deleted BYOK
+   * record used to take this week's total down with it. The one figure this
+   * leaves imprecise is a day that gains an unpriced turn and a downward rate
+   * correction at once, which keeps the higher earlier total until the turn
+   * prices again.
+   *
+   * Recomputing from turns rather than adding per event also self-heals, filling
+   * the ledger in from existing history after an upgrade or a leadership
+   * handover.
    */
   private bankTurnsIntoLedger(): void {
     const prices = this.billing.prices();
@@ -325,14 +343,28 @@ export class Aggregator extends EventEmitter {
     ]);
     for (const key of days) {
       const sum = fromTurns.get(key) ?? 0;
-      if (exactFrom !== undefined && key >= exactFrom) {
+      const banked = this.dailyCost.get(key) ?? 0;
+      const exact =
+        exactFrom !== undefined && key >= exactFrom && !unpriced.has(key);
+      if (exact) {
         if (sum > 0) this.dailyCost.set(key, sum);
         else this.dailyCost.delete(key);
-        if (unpriced.has(key)) this.unpricedDays.add(key);
-        else this.unpricedDays.delete(key);
-      } else {
-        if (sum > (this.dailyCost.get(key) ?? 0)) this.dailyCost.set(key, sum);
-        if (unpriced.has(key)) this.unpricedDays.add(key);
+        this.unpricedDays.delete(key);
+        continue;
+      }
+      if (sum > banked) this.dailyCost.set(key, sum);
+      if (unpriced.has(key)) {
+        this.unpricedDays.add(key);
+      } else if (sum > 0 && sum >= banked) {
+        // Nothing on this day is unpriced any more and its retained turns
+        // account for every dollar banked against it, so whatever once made the
+        // day a lower bound has since priced. Without this the marker set during
+        // a transient gap in the rates would outlive the gap by up to
+        // COST_LEDGER_DAYS, leaving a complete total reading as understated.
+        // Evidence is required rather than assumed: a day with no priced turn
+        // left (sum === 0) keeps its marker, since a cleared one would promise
+        // exactness about a day nothing can still speak for.
+        this.unpricedDays.delete(key);
       }
     }
   }

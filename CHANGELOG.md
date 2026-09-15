@@ -3,6 +3,13 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- Today, week and month totals no longer fall when a rate stops resolving.
+  Deleting a `~/.claude-code-byok/` record, or another window taking over as leader without the provider extension that priced those interactions, used to erase cost already recorded for every day inside the retained history.
+  Such a day now keeps its figure and is marked `≥`.
+- A total stops reading as a lower bound once every interaction behind it can be priced again, rather than keeping the `≥` for as long as the day stays in the ledger.
+
 ## 1.8.1 - 2026-09-15
 
 - Interactions on models Claude Code cannot price are no longer costed at Claude's rate, which made a session on another provider report a wrong figure that looked ordinary.

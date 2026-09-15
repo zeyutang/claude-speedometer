@@ -292,7 +292,7 @@ const UNRESOLVED_ENDPOINT_TITLE =
 
 const LOWER_BOUND_TITLE =
   "Lower bound: this window contains interactions with no configured rate, " +
-  "which contribute nothing to the total.";
+  "so the total may leave out what they cost.";
 
 /** The latest turn's cost, with hover text saying where the number came from
  *  (or why there is none), so a recomputed or missing figure explains itself. */
