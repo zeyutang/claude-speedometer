@@ -2,7 +2,7 @@
   "name": "claude-speedometer",
   "displayName": "Claude Speedometer",
   "description": "Indicator showing the token throughput and timing of your Claude Code interactions.",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "publisher": "zeyutang",
   "license": "MIT",
   "repository": {
@@ -84,13 +84,30 @@
                 "type": "object",
                 "additionalProperties": {
                   "type": "object",
-                  "required": ["input", "output", "cacheRead", "cacheWrite"],
+                  "required": [
+                    "input",
+                    "output",
+                    "cacheRead",
+                    "cacheWrite"
+                  ],
                   "additionalProperties": false,
                   "properties": {
-                    "input": { "type": "number", "minimum": 0 },
-                    "output": { "type": "number", "minimum": 0 },
-                    "cacheRead": { "type": "number", "minimum": 0 },
-                    "cacheWrite": { "type": "number", "minimum": 0 }
+                    "input": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "output": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cacheRead": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "cacheWrite": {
+                      "type": "number",
+                      "minimum": 0
+                    }
                   }
                 }
               }
@@ -100,13 +117,30 @@
               "description": "Model id, then rate.",
               "additionalProperties": {
                 "type": "object",
-                "required": ["input", "output", "cacheRead", "cacheWrite"],
+                "required": [
+                  "input",
+                  "output",
+                  "cacheRead",
+                  "cacheWrite"
+                ],
                 "additionalProperties": false,
                 "properties": {
-                  "input": { "type": "number", "minimum": 0 },
-                  "output": { "type": "number", "minimum": 0 },
-                  "cacheRead": { "type": "number", "minimum": 0 },
-                  "cacheWrite": { "type": "number", "minimum": 0 }
+                  "input": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "output": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "cacheRead": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "cacheWrite": {
+                    "type": "number",
+                    "minimum": 0
+                  }
                 }
               }
             }
