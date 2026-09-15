@@ -74,6 +74,13 @@ export interface BillingContext {
    * fallback in {@link costBasisFor} depends on.
    */
   overrideSeen: boolean;
+  /**
+   * True when a billing-context provider reported outright that Claude Code
+   * priced these requests at its default model's rate. Only a provider can know
+   * this, so it is the one direct answer to a question every other input here
+   * can only be evidence about.
+   */
+  reportedCostIsGuess?: boolean;
 }
 
 /**
@@ -202,6 +209,14 @@ export function costBasisFor(
   model: string | undefined,
   ctx: BillingContext
 ): CostBasis {
+  // A provider managing this window's Claude Code can state the answer rather
+  // than leave it to be inferred, and it is checked first because it is the only
+  // input that cannot be misread: an endpoint can be unresolvable and a model id
+  // can be made to look first-party, but nothing else is in a position to say
+  // that the reported figure is the default-model fallback. It can only withdraw
+  // trust, never grant it, so a provider claiming a usable figure still has to
+  // get past the endpoint test below.
+  if (ctx.reportedCostIsGuess) return "local";
   if (ctx.endpoint) {
     return isFirstPartyEndpoint(ctx.endpoint) ? "upstream" : "local";
   }
@@ -218,6 +233,32 @@ export function costBasisFor(
  * this whole module exists to avoid. `byModel` therefore covers only the case
  * where the endpoint could not be resolved at all.
  */
+/**
+ * Reconcile a resolved billing context with the model the event actually names.
+ *
+ * A first-party endpoint claim is refuted when the served model id is one
+ * Anthropic's API does not have: the id on the event is direct evidence of what
+ * served the request, while the endpoint is inferred from configuration, which
+ * can be stale or describe another account than the one serving this process (a
+ * billing-context provider answering for an account it did not inject is how
+ * this fires). The claim is disbelieved rather than the model, so the turn is
+ * costed locally from a configured rate, and its endpoint is left unknown
+ * instead of being stamped with a URL it did not use.
+ *
+ * A turn whose event names no model carries no contradicting evidence, and a
+ * `claude-` id cannot refute a first-party claim, so both pass through
+ * unchanged.
+ */
+export function reconcileContext(
+  model: string | undefined,
+  ctx: BillingContext
+): BillingContext {
+  if (!model) return ctx;
+  if (!ctx.endpoint || !isFirstPartyEndpoint(ctx.endpoint)) return ctx;
+  if (isFirstPartyModelId(model)) return ctx;
+  return { ...ctx, endpoint: undefined };
+}
+
 export function lookupRate(
   prices: PriceTable,
   endpoint: string | undefined,

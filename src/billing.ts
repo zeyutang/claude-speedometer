@@ -49,6 +49,9 @@ interface ProviderAnswer {
   /** Normalized base URL, or undefined when the provider is armed but silent
    *  about the endpoint. */
   endpoint?: string;
+  /** The provider's own `costBasis` of "unknown": Claude Code did not recognize
+   *  the model, so what it reported is its default model's rate. */
+  reportedCostIsGuess: boolean;
   /** Rates keyed by model id, if the provider supplies them. */
   pricing?: Map<string, ModelRate>;
 }
@@ -135,7 +138,13 @@ export class BillingService implements BillingSource {
 
   private resolveContext(workspace: string | undefined): BillingContext {
     const answer = this.resolveProvider();
-    if (answer) return { endpoint: answer.endpoint, overrideSeen: true };
+    if (answer) {
+      return {
+        endpoint: answer.endpoint,
+        overrideSeen: true,
+        reportedCostIsGuess: answer.reportedCostIsGuess,
+      };
+    }
 
     // Later files win, matching Claude Code: the project's shared settings are
     // applied over the user's, and the project's local settings over those.
@@ -214,13 +223,29 @@ function readProviderContext(raw: unknown): ProviderAnswer | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const o = raw as Record<string, unknown>;
   if (!o.armed) return undefined;
-  // A null endpoint is the provider's way of saying "first party", which is a
-  // positive answer rather than a missing one.
+  // "unknown" is the provider reporting that Claude Code had no row for this
+  // model and fell back to its default model's rate. Any other value, including
+  // a provider that publishes no costBasis at all, leaves the question to be
+  // decided from the endpoint as before.
+  const reportedCostIsGuess = o.costBasis === "unknown";
   const url = typeof o.endpoint === "string" ? o.endpoint : undefined;
+  // A null endpoint is the provider's way of saying "first party", but only from
+  // one that also stands behind the reported figure. Said together with
+  // "unknown" it means the opposite: an account somewhere else whose URL the
+  // provider is not naming. Reading that as Anthropic's would both trust the
+  // figure the provider just disowned and file the turn's history under an
+  // endpoint it never used, so the endpoint stays unresolved and the rates the
+  // provider supplies are what price the turn.
   const endpoint =
-    o.endpoint === null ? ANTHROPIC_DEFAULT_ENDPOINT : normalizeEndpoint(url);
+    o.endpoint === null && !reportedCostIsGuess
+      ? ANTHROPIC_DEFAULT_ENDPOINT
+      : normalizeEndpoint(url);
   const pricing = parsePriceTable({ byModel: o.pricing }).byModel;
-  return { endpoint, pricing: pricing.size > 0 ? pricing : undefined };
+  return {
+    endpoint,
+    reportedCostIsGuess,
+    pricing: pricing.size > 0 ? pricing : undefined,
+  };
 }
 
 /** `env.ANTHROPIC_BASE_URL` from one Claude Code settings file, or undefined if

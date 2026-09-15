@@ -73,6 +73,7 @@ Claude Code computes `cost_usd` client-side, multiplying the token counts the AP
 When no row in that table matches the model id it does not report nothing: it falls back to the default model's rate, so a request served by another provider arrives priced as Claude.
 This extension therefore ignores that figure for any request it cannot confirm went to Anthropic, and prices the request from your own rates instead.
 Which provider served a request is decided from the base URL, never from the model name, because a gateway can serve a model called `~anthropic/claude-opus-latest` at its own rates.
+With one exception: a base-URL reading that says Anthropic is disbelieved when the model id on the response is not one Anthropic's API has (a provider path like `accounts/fireworks/models/kimi-k3` could never be served by api.anthropic.com), because the id is direct evidence while a configured URL can be stale or describe another window's account.
 
 In practice:
 
@@ -98,6 +99,7 @@ Set `claudeSpeedometer.modelPricing` to your provider's rates, in USD per millio
 The outer key is the `ANTHROPIC_BASE_URL` you configured for Claude Code, matched case-insensitively.
 Use `"*"` as a model id to price everything that endpoint serves.
 `byModel` maps model ids straight to rates and applies only when the base URL cannot be read at all.
+Note that model ids are matched as the API response reports them from the server, which can differ from the model id string you configured.
 
 All four rates are required.
 A cache write costs 1.25x to 2x the input rate on Anthropic's billing, but only the plain input rate on a gateway that bills input, cached input and output alone, so it cannot be derived from the others.

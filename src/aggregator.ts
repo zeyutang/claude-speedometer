@@ -15,6 +15,7 @@ import {
   NO_BILLING_SOURCE,
   costBasisFor,
   priceTurn,
+  reconcileContext,
 } from "./pricing";
 import { resolveWorkspace } from "./workspace";
 
@@ -139,7 +140,7 @@ export class Aggregator extends EventEmitter {
       // the failure this path exists to prevent. Staying local costs the row
       // from its complete token counts, or marks it unpriced.
       turn.workspace = workspace;
-      const ctx = this.billing.context(workspace);
+      const ctx = reconcileContext(turn.model, this.billing.context(workspace));
       if (costBasisFor(turn.model, ctx) === "local") {
         turn.endpoint = ctx.endpoint;
         if (turn.costBasis !== "local") {
@@ -206,8 +207,10 @@ export class Aggregator extends EventEmitter {
     if (!t) {
       // Where the requests are going is read once, here, and stamped on: it
       // comes from configuration the user can change at any moment, so deriving
-      // it later would re-attribute this row the next time they switched.
-      const ctx = this.billing.context(workspace);
+      // it later would re-attribute this row the next time they switched. The
+      // answer is reconciled with the model the event names, which is the direct
+      // evidence of what served the request.
+      const ctx = reconcileContext(model, this.billing.context(workspace));
       t = {
         promptId,
         startMs: nowMs,

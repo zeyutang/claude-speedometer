@@ -14,6 +14,7 @@ follows [Semantic Versioning](https://semver.org).
 - The Model section shows the endpoint for an interaction Claude Code could not price itself.
 - A long model id is shortened to the name itself, dropping a provider namespace along with the shared `claude-` prefix, so `accounts/fireworks/models/kimi-k3` reads as `kimi-k3`.
   The stats tab keeps the full id on hover.
+- A base-URL reading that points at Anthropic is no longer believed when the model id on the response is not one Anthropic's API has, so third-party traffic is no longer priced at Claude's rate when the reading is stale or describes another account.
 - Added `claudeSpeedometer.billingContextProvider`, for setups that inject the base URL straight into the Claude Code process.
   An extension in the same window can supply the endpoint and its rates through a `getBillingContext()` export.
 
