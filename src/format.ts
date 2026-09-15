@@ -72,6 +72,20 @@ export function fmtEndpoint(endpoint: string | undefined): string {
   return endpoint.replace(/^https?:\/\//, "");
 }
 
+/** A model id as shown in the UI, reduced to the part that identifies the model:
+ *  the vendor namespace every id from one provider shares
+ *  ("accounts/fireworks/models/kimi-k3" -> "kimi-k3") and the `claude-` prefix
+ *  every first-party id shares ("claude-opus-5[1m]" -> "opus-5[1m]"). Neither
+ *  distinguishes one row from another, and together they cost more columns than
+ *  the name itself in a layout budgeted to the short form. Callers pair it with
+ *  the full id on hover wherever the surface allows one. A degenerate id that
+ *  stripping would empty ("vendor/", "claude-") keeps its full text instead. */
+export function fmtModel(model: string | undefined): string {
+  if (!model) return "-";
+  const leaf = model.slice(model.lastIndexOf("/") + 1);
+  return leaf.replace(/^claude-/, "") || model;
+}
+
 export function fmtCost(usd: number): string {
   if (!usd) return "$0.00";
   // Group thousands ("$1,083.28", "$1,234,567.89"). Sub-cent amounts keep four

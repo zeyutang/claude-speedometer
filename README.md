@@ -43,8 +43,10 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
   An interaction on a model Claude Code cannot price reads as `unpriced` unless you have configured a rate for it, and a total containing one is marked `≥`.
   See [Where the Cost Figures Come From](#where-the-cost-figures-come-from) for how the dollar amounts are computed and what they mean.
 - **Model**: model, plus **reasoning effort** (only when the model supports it) and **Fast mode** (only when it is on).
+  A long id is shortened to the name itself, dropping a provider namespace along with the shared `claude-` prefix, so `accounts/fireworks/models/kimi-k3` reads as `kimi-k3`.
+  The tab keeps the full id on hover.
 - **Recent** (tab only): the last several interactions, one row each, with local time, workspace folder, session id, model and effort, input tokens, output tokens, and speed (tok/s).
-  Cells are abbreviated to keep the columns tight: the time drops the year, the workspace shows only its innermost folder, and the model id drops the `claude-` prefix every id shares (a long one is also cut short).
+  Cells are abbreviated to keep the columns tight: the time drops the year, the workspace shows only its innermost folder, and the model id drops a provider namespace along with the shared `claude-` prefix (a long one is also cut short).
   Hover any of them for the full value.
 - **Workspace** (tab only): the session id and the full directory path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
 

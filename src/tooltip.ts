@@ -6,6 +6,7 @@ import {
   fmtEffort,
   fmtEndpoint,
   fmtInt,
+  fmtModel,
   fmtPricedCost,
   fmtTime,
   fmtTokPerSec,
@@ -69,7 +70,7 @@ export function buildTooltip(
     {
       title: "Model",
       rows: [
-        ["Model", v.model ?? "-"],
+        ["Model", fmtModel(v.model)],
         // Endpoint row appears only for a turn Claude Code could not price
         // itself, where which endpoint served it is what decides the cost below.
         ...(v.costBasis === "local"

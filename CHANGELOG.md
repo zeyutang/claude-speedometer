@@ -18,6 +18,8 @@ follows [Semantic Versioning](https://semver.org).
   An interaction with no matching rate reads as "unpriced" rather than as free, and any total that leaves one out is marked with a ≥.
 - Cost is now derived when it is displayed, so correcting a rate also corrects the interactions already recorded.
 - The Model section shows the endpoint for an interaction Claude Code could not price itself.
+- A long model id is shortened to the name itself, dropping a provider namespace along with the shared `claude-` prefix, so `accounts/fireworks/models/kimi-k3` reads as `kimi-k3`.
+  The stats tab keeps the full id on hover.
 - Added `claudeSpeedometer.billingContextProvider`, for setups that inject the base URL straight into the Claude Code process.
   An extension in the same window can supply the endpoint and its rates through a `getBillingContext()` export.
 

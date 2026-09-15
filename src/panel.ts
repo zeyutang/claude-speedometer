@@ -6,6 +6,7 @@ import {
   fmtEffort,
   fmtEndpoint,
   fmtInt,
+  fmtModel,
   fmtPricedCost,
   fmtTime,
   fmtTimestamp,
@@ -123,10 +124,10 @@ export class StatsPanel {
         const rv = viewOf(t, now);
         const session = rv.sessionId ? rv.sessionId.slice(0, 8) : "-";
         const model = rv.model ?? "-";
-        // Model column reads e.g. "opus-4-8 | max": drop the "claude-" prefix,
-        // which every id shares and so distinguishes nothing, and append the
-        // lowercased effort level. The title keeps the full id for hover.
-        const modelShort = model.replace(/^claude-/, "");
+        // Model column reads e.g. "opus-4-8 | max": the shortened id (see
+        // fmtModel) plus the lowercased effort level. The title keeps the full
+        // id for hover.
+        const modelShort = fmtModel(rv.model);
         const effort = rv.effort ? rv.effort.toLowerCase() : "";
         const modelCell = effort ? `${modelShort} | ${effort}` : modelShort;
         const modelTitle = effort ? `${model} | ${effort}` : model;
@@ -196,7 +197,9 @@ export class StatsPanel {
       <hr />
       <h3>Model</h3>
       ${kv([
-        ["Model", v.model ?? "-"],
+        // The full id, which the shortened form drops a namespace from, is the
+        // hover title.
+        ["Model", fmtModel(v.model), v.model ?? "-"],
         // Endpoint row appears only for a turn Claude Code could not price
         // itself, where which endpoint served it is what decides the figure
         // above. A first-party turn has nothing to disambiguate.
