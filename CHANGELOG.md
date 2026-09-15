@@ -3,6 +3,16 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
+## 1.8.3
+
+- Today, week and month totals keep accumulating while a rate is missing.
+  1.8.2 held such a day at its last figure, which also held back interactions priced after it, so a total could sit unchanged while spend continued.
+  An interaction now keeps the last cost it was priced at, so the day's figure stays whole and new spend still adds to it.
+- The `≥` marker is reserved for a total genuinely missing an interaction's cost, which now means one that has never had a rate.
+- A project that has billed a provider other than Anthropic is no longer trusted to Anthropic's rate on the strength of a `claude-` model id alone.
+  Deleting that project's `~/.claude-code-byok/` record used to leave its interactions priced as Claude rather than as your provider, with nothing marking the figure as wrong.
+  They now read as `unpriced` until a rate is configured, and setting the project's base URL to Anthropic's own clears the memory.
+
 ## 1.8.2
 
 - Today, week and month totals no longer fall when a rate stops resolving.

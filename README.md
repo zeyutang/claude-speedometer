@@ -74,6 +74,8 @@ When no row in that table matches the model id it does not report nothing: it fa
 This extension therefore ignores that figure for any request it cannot confirm went to Anthropic, and prices the request from your own rates instead.
 Which provider served a request is decided from the base URL, never from the model name, because a gateway can serve a model called `~anthropic/claude-opus-latest` at its own rates.
 With one exception: a base-URL reading that says Anthropic is disbelieved when the model id on the response is not one Anthropic's API has (a provider path like `accounts/fireworks/models/glm-5p3` could never be served by api.anthropic.com), because the id is direct evidence while a configured URL can be stale or describe another window's account.
+Once a project's traffic has been attributed anywhere other than Anthropic, later requests from it are not trusted to Anthropic's rate on the strength of a `claude-` model id alone, so losing the configuration that named your provider leaves them `unpriced` rather than priced as Claude.
+Setting that project's base URL to Anthropic's own clears this.
 
 In practice:
 

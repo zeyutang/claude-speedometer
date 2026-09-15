@@ -11,13 +11,16 @@ import {
   utcDayKey,
 } from "./types";
 import {
+  BillingContext,
   BillingSource,
   NO_BILLING_SOURCE,
   costBasisFor,
+  isFirstPartyEndpoint,
   priceTurn,
   reconcileContext,
+  reconcileHistory,
 } from "./pricing";
-import { resolveWorkspace } from "./workspace";
+import { isWithinDir, resolveWorkspace } from "./workspace";
 
 // Cap on retained turns. The whole set is serialized into state.json on every
 // update and re-parsed by each window, so this bounds that file's size; ~1k
@@ -78,13 +81,14 @@ export class Aggregator extends EventEmitter {
   // (deduped via seenRequests) and persisted, so day/week/month totals survive
   // turn pruning.
   private dailyCost = new Map<string, number>();
-  // UTC days holding at least one turn nothing can currently price. Such a turn
-  // adds nothing to the day's sum, so without this marker a day of unpriced work
-  // would read as a free one instead of as a possibly understated one. The
-  // marker is deliberately conservative: a day that banked the turn's cost while
-  // its rate still resolved carries it still, and is marked all the same, since
-  // nothing retained can now vouch for the figure being complete.
+  // UTC days holding at least one turn that no rate, current or remembered, can
+  // put a figure on. Those turns bank no dollars, so without this marker a day
+  // of unpriced work would read as a free one instead of as an understated one.
   private unpricedDays = new Set<string>();
+  // Project directories whose traffic has been attributed anywhere other than
+  // Anthropic, mapped to when that was last seen. Shuts the model-id fallback
+  // for those directories; see `reconcileHistory`.
+  private gatewayWorkspaces = new Map<string, number>();
 
   constructor(
     private readonly billing: BillingSource = NO_BILLING_SOURCE,
@@ -143,7 +147,7 @@ export class Aggregator extends EventEmitter {
       // the failure this path exists to prevent. Staying local costs the row
       // from its complete token counts, or marks it unpriced.
       turn.workspace = workspace;
-      const ctx = reconcileContext(turn.model, this.billing.context(workspace));
+      const ctx = this.contextFor(turn.model, workspace);
       if (costBasisFor(turn.model, ctx) === "local") {
         turn.endpoint = ctx.endpoint;
         if (turn.costBasis !== "local") {
@@ -193,6 +197,51 @@ export class Aggregator extends EventEmitter {
     this.armSettleTimer(scope, promptId);
   }
 
+  /**
+   * The billing context for a request from `workspace`, reconciled against both
+   * the model the event names and what this directory has billed before.
+   *
+   * Also the one place gateway traffic is recorded, that being a property of the
+   * resolved context rather than of what any caller does with it. Recording is
+   * driven off the context *before* the directory's own history is applied, so
+   * the memory is only ever refreshed by independent evidence and cannot keep
+   * itself alive.
+   */
+  private contextFor(
+    model: string | undefined,
+    workspace: string | undefined
+  ): BillingContext {
+    const ctx = reconcileContext(model, this.billing.context(workspace));
+    if (workspace) {
+      if (isFirstPartyEndpoint(ctx.endpoint)) {
+        // A resolved Anthropic URL is the one thing that can retire the memory
+        // early, and the fallback can never produce one, so this cannot become
+        // circular. Without it a project moved back to Anthropic would read as
+        // unpriced until its entry aged out. Only the exact directory is
+        // retired, a containing entry being someone else's claim to withdraw.
+        this.gatewayWorkspaces.delete(workspace);
+      } else if (costBasisFor(model, ctx) === "local") {
+        // Any conclusion of "not Anthropic" counts, an unrecognized model id
+        // included, so one gateway-served model protects the first-party
+        // spellings served beside it.
+        this.gatewayWorkspaces.set(workspace, Date.now());
+      }
+    }
+    return reconcileHistory(ctx, this.billedGateway(workspace));
+  }
+
+  /** True when `workspace`, or a directory containing it, has billed a gateway.
+   *  Containment matters because a project's sessions carry whichever directory
+   *  each was launched from, so an exact-path test alone would protect a session
+   *  started at the repository root and not one started below it. */
+  private billedGateway(workspace: string | undefined): boolean {
+    if (!workspace) return false;
+    for (const dir of this.gatewayWorkspaces.keys()) {
+      if (isWithinDir(workspace, dir)) return true;
+    }
+    return false;
+  }
+
   /** The row this request belongs to, created on first sight. The model and
    *  effort it reports form part of the row's key, so a request Claude Code
    *  routes to another model under the same prompt.id opens its own row rather
@@ -213,7 +262,7 @@ export class Aggregator extends EventEmitter {
       // it later would re-attribute this row the next time they switched. The
       // answer is reconciled with the model the event names, which is the direct
       // evidence of what served the request.
-      const ctx = reconcileContext(model, this.billing.context(workspace));
+      const ctx = this.contextFor(model, workspace);
       t = {
         promptId,
         startMs: nowMs,
@@ -277,26 +326,23 @@ export class Aggregator extends EventEmitter {
    * cost. Cost is derived here rather than at ingest so that a later edit to the
    * price table reaches history instead of only new turns.
    *
-   * A day is recomputed outright only where `sum` is the whole truth about it,
-   * which takes two things. It has to lie wholly inside the retained history:
-   * pruning is a rolling age cutoff plus an oldest-first size cap, so the oldest
-   * retained turn's own day is the last one that may be missing turns and every
-   * day after it is complete. And every one of its turns has to have priced,
-   * because an unpriced turn is absent from `sum` rather than free, so a day
-   * holding one has only a partial figure to offer. Where both hold, the day is
-   * set from `sum`, which is what lets a corrected rate lower a day as well as
-   * raise it.
+   * A turn that priced once keeps that figure in {@link Turn.lastPricedUsd} and
+   * contributes it for as long as it is retained, so a rate that goes missing
+   * leaves the day's sum where it was. Without that memo a removed
+   * `~/.claude-code-byok/` record, or a leadership handover to a window that
+   * cannot see the provider, revalued the day's turns at zero, and the sum is
+   * what every day here is measured against: recomputing took the day's cost
+   * away outright, while ratcheting on max(banked, sum) instead froze the day,
+   * hiding fresh spend behind the gap the missing rate had opened. Only a turn
+   * that has never priced contributes nothing, which is a real hole in the
+   * total and is what {@link unpricedDays} marks.
    *
-   * Every other day can only rise, via max(banked, sum). For a day whose turns
-   * are gone that is because the banked figure is the only record of them left.
-   * For a day holding an unpriced turn it is because losing a rate says nothing
-   * about what was spent: recomputing there would delete dollars that were
-   * banked when the rate was still resolvable, which is how a deleted BYOK
-   * record used to take this week's total down with it. The one figure this
-   * leaves imprecise is a day that gains an unpriced turn and a downward rate
-   * correction at once, which keeps the higher earlier total until the turn
-   * prices again.
-   *
+   * Days lying wholly inside the retained history are then recomputed outright,
+   * which lets a corrected rate lower a day as well as raise it. Pruning is a
+   * rolling age cutoff plus an oldest-first size cap, so the oldest retained
+   * turn's own day is the last one that may be missing turns and every day after
+   * it is complete. Earlier days can only rise, via max(banked, sum): their
+   * turns are gone and the banked figure is the only record of them left.
    * Recomputing from turns rather than adding per event also self-heals, filling
    * the ledger in from existing history after an upgrade or a leadership
    * handover.
@@ -310,7 +356,15 @@ export class Aggregator extends EventEmitter {
       if (t.lastMs < oldestMs) oldestMs = t.lastMs;
       const key = utcDayKey(t.lastMs);
       const cost = priceTurn(t, prices);
-      if (cost.state === "unpriced") {
+      let usd: number | undefined;
+      if (cost.state === "recomputed") {
+        usd = t.lastPricedUsd = cost.usd;
+      } else if (cost.state === "upstream") {
+        usd = cost.usd;
+      } else {
+        usd = t.lastPricedUsd;
+      }
+      if (usd === undefined) {
         // A turn that consumed no tokens costs nothing under any rate, so it is
         // no reason to call the day's total a lower bound.
         const tokens =
@@ -321,7 +375,7 @@ export class Aggregator extends EventEmitter {
         if (tokens > 0) unpriced.add(key);
         continue;
       }
-      if (cost.usd) fromTurns.set(key, (fromTurns.get(key) ?? 0) + cost.usd);
+      if (usd) fromTurns.set(key, (fromTurns.get(key) ?? 0) + usd);
     }
     // Bounded by the retention cutoff as well as by the oldest retained turn,
     // because two turns outlive pruning by age (the displayed row and any still
@@ -344,12 +398,11 @@ export class Aggregator extends EventEmitter {
     for (const key of days) {
       const sum = fromTurns.get(key) ?? 0;
       const banked = this.dailyCost.get(key) ?? 0;
-      const exact =
-        exactFrom !== undefined && key >= exactFrom && !unpriced.has(key);
-      if (exact) {
+      if (exactFrom !== undefined && key >= exactFrom) {
         if (sum > 0) this.dailyCost.set(key, sum);
         else this.dailyCost.delete(key);
-        this.unpricedDays.delete(key);
+        if (unpriced.has(key)) this.unpricedDays.add(key);
+        else this.unpricedDays.delete(key);
         continue;
       }
       if (sum > banked) this.dailyCost.set(key, sum);
@@ -380,8 +433,19 @@ export class Aggregator extends EventEmitter {
     }
   }
 
+  /** Drop remembered gateway directories not seen within the ledger's horizon.
+   *  Sharing that horizon keeps one retention story: a directory is remembered
+   *  for as long as a day of its spend could still be on display. */
+  private pruneGatewayWorkspaces(): void {
+    const cutoff = Date.now() - COST_LEDGER_DAYS * DAY_MS;
+    for (const [dir, seen] of this.gatewayWorkspaces) {
+      if (seen < cutoff) this.gatewayWorkspaces.delete(dir);
+    }
+  }
+
   private prune(): void {
     this.pruneDailyCost();
+    this.pruneGatewayWorkspaces();
     const cutoff = Date.now() - this.retentionDays * DAY_MS;
     // Running prompts, protected as a whole: dropping one row of a prompt that
     // is still accumulating would let its requests be counted again.
@@ -435,13 +499,15 @@ export class Aggregator extends EventEmitter {
   snapshot(): Snapshot {
     this.bankTurnsIntoLedger();
     this.pruneDailyCost();
+    this.pruneGatewayWorkspaces();
     return {
-      version: 2,
+      version: 3,
       updatedMs: Date.now(),
       displayId: this.displayId,
       turns: [...this.turns.values()],
       dailyCost: Object.fromEntries(this.dailyCost),
       unpricedDays: [...this.unpricedDays],
+      gatewayWorkspaces: Object.fromEntries(this.gatewayWorkspaces),
     };
   }
 
@@ -458,6 +524,20 @@ export class Aggregator extends EventEmitter {
     this.runningBySession.clear();
     this.dailyCost = new Map(Object.entries(snap.dailyCost ?? {}));
     this.unpricedDays = new Set(snap.unpricedDays ?? []);
+    this.gatewayWorkspaces = new Map(
+      Object.entries(snap.gatewayWorkspaces ?? {})
+    );
+    // Seed the directory memory from the retained turns too, so it fills in from
+    // existing history on upgrade and after a handover from a build without it.
+    // Read off a resolved non-Anthropic endpoint rather than off the turn's
+    // basis, which the memory itself can set, and so would make itself immortal.
+    for (const t of snap.turns) {
+      if (!t.workspace || !t.endpoint) continue;
+      if (isFirstPartyEndpoint(t.endpoint)) continue;
+      if (t.lastMs > (this.gatewayWorkspaces.get(t.workspace) ?? 0)) {
+        this.gatewayWorkspaces.set(t.workspace, t.lastMs);
+      }
+    }
     // Seed the ledger from the retained turns too, so an upgrade from a version
     // without the ledger (or a handover) shows history immediately.
     this.bankTurnsIntoLedger();

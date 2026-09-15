@@ -46,6 +46,13 @@ export interface Turn {
    *  its token counts. Absent on snapshots written before cost attribution
    *  existed, which {@link priceTurn} reads as "upstream". */
   costBasis?: CostBasis;
+  /** The last cost successfully recomputed for this row, remembered so that a
+   *  rate going missing does not silently revalue the row at zero. Only ever
+   *  written from a "recomputed" figure: an upstream one is Claude Code's, and
+   *  memoizing it would survive the very reclassification that discards it.
+   *  Read by the daily ledger, never by the display, which keeps saying
+   *  "unpriced" rather than presenting a stale rate as current. */
+  lastPricedUsd?: number;
 
   // identity (part of the key; fixed when the turn is created)
   model?: string;
@@ -120,7 +127,8 @@ export function str(attrs: Attrs, key: string): string | undefined {
 
 /** Serializable shared state written by the leader, read by all windows. */
 export interface Snapshot {
-  // 2 adds the per-turn cost basis and the unpriced-day markers below. Both are
+  // 2 adds the per-turn cost basis and the unpriced-day markers below, 3 the
+  // remembered per-turn cost and the gateway-directory memory. All are
   // additions, so an older build still reads a newer snapshot and a newer build
   // an older one. Nothing gates on this number, which is kept as a record.
   version: number;
@@ -131,10 +139,16 @@ export interface Snapshot {
   // events arrive and kept beyond the per-turn retention, so Today/Week/Month
   // totals stay accurate even after old turns are pruned.
   dailyCost?: Record<string, number>;
-  // UTC days ("YYYY-MM-DD") holding at least one turn that had no rate to price
-  // it. Nothing retained can say the day's figure covers that turn, so the day,
-  // and any window containing it, reads as a lower bound rather than a total.
+  // UTC days ("YYYY-MM-DD") whose banked total leaves out a turn that no rate,
+  // current or remembered, could put a figure on. Such a turn contributes
+  // nothing, so the day, and any window containing it, is a lower bound rather
+  // than a total.
   unpricedDays?: string[];
+  // Project directories whose traffic has been attributed anywhere other than
+  // Anthropic, mapped to the epoch ms that was last seen. Persisted because it
+  // has to outlive the turns that evidenced it: the gap it closes opens exactly
+  // when the configuration naming the gateway has gone missing.
+  gatewayWorkspaces?: Record<string, number>;
 }
 
 /** UTC calendar-day key ("YYYY-MM-DD") for an epoch-ms instant. */
@@ -146,9 +160,9 @@ export function utcDayKey(ms: number): string {
   return `${y}-${m}-${day}`;
 }
 
-/** One window's spend. `lowerBound` marks a total that is not known to cover
- *  every turn in the window, at least one of them having no rate to price it, so
- *  it may understate by an unknown amount rather than being merely approximate. */
+/** One window's spend. `lowerBound` marks a total that is missing the cost of
+ *  at least one turn no rate could put a figure on, so it understates by an
+ *  unknown amount rather than being merely approximate. */
 export interface CostWindow {
   usd: number;
   lowerBound: boolean;

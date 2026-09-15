@@ -291,8 +291,8 @@ const UNRESOLVED_ENDPOINT_TITLE =
   "interactions.";
 
 const LOWER_BOUND_TITLE =
-  "Lower bound: this window contains interactions with no configured rate, " +
-  "so the total may leave out what they cost.";
+  "Lower bound: this window contains interactions that have never had a " +
+  "configured rate, which contribute nothing to the total.";
 
 /** The latest turn's cost, with hover text saying where the number came from
  *  (or why there is none), so a recomputed or missing figure explains itself. */

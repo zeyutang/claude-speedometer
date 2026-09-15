@@ -258,6 +258,39 @@ export function reconcileContext(
 }
 
 /**
+ * Withdraw the model-id fallback from a project directory already known to bill
+ * somewhere other than Anthropic.
+ *
+ * The fallback in {@link costBasisFor} trusts a first-party model id whenever no
+ * override can be found anywhere, and it has to: an ordinary first-party user
+ * never sets a base URL, so their endpoint never resolves, and without it they
+ * would read as unpriced. What it cannot see is a gateway that serves a
+ * first-party *spelling* and injects its base URL where this extension cannot
+ * read it. Lose the BYOK record that named such a gateway and nothing is left to
+ * contradict the id, so Claude Code's guess at Anthropic's rate is banked as
+ * authoritative, unmarked and looking entirely ordinary.
+ *
+ * Having previously attributed traffic from the same directory to anywhere other
+ * than Anthropic closes that. It is evidence of the kind `overrideSeen` already
+ * carries, so it is expressed that way rather than as a further branch: what it
+ * rules out is the "plain first-party install" reading, and one non-Anthropic
+ * request from a directory rules that out for the directory.
+ *
+ * Only trust is withdrawn, never an endpoint restored. A project can move to
+ * another provider or back to Anthropic, so pricing its traffic at a rate it may
+ * have stopped paying would be the confident wrong number this module exists to
+ * avoid. The turn is costed from whatever rate is configured for it, or else
+ * reads as unpriced, which is the visible gap.
+ */
+export function reconcileHistory(
+  ctx: BillingContext,
+  billedGateway: boolean,
+): BillingContext {
+  if (!billedGateway || ctx.endpoint || ctx.overrideSeen) return ctx;
+  return { ...ctx, overrideSeen: true };
+}
+
+/**
  * The configured rate for one turn, or undefined if none matches.
  *
  * The model is looked up under the id the *event* reports, which on a gateway

@@ -40,6 +40,7 @@ import {
   normalizeEndpoint,
   parseProviders,
 } from "./pricing";
+import { isWithinDir } from "./workspace";
 
 const RECORDS_DIR = path.join(os.homedir(), ".claude-code-byok");
 
@@ -94,14 +95,6 @@ function normalizeDir(raw: unknown): string | undefined {
   if (!trimmed || !path.isAbsolute(trimmed)) return undefined;
   const resolved = path.resolve(trimmed);
   return resolved.length > 1 ? resolved.replace(/[\\/]+$/, "") : resolved;
-}
-
-/** True when `dir` is `parent` or sits inside it. Compared segment-wise rather
- *  than with `startsWith`, so `/a/bc` does not read as being inside `/a/b`. */
-function isWithin(dir: string, parent: string): boolean {
-  if (dir === parent) return true;
-  const rel = path.relative(parent, dir);
-  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
 /**
@@ -225,7 +218,7 @@ export function findByokRecord(
   let bestDepth = -1;
   for (const record of records) {
     for (const parent of record.dirs) {
-      if (!isWithin(dir, parent)) continue;
+      if (!isWithinDir(dir, parent)) continue;
       const depth = parent.split(path.sep).length;
       if (
         depth > bestDepth ||

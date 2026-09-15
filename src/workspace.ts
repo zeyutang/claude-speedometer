@@ -9,6 +9,8 @@ const PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 // on the next event instead.
 const cache = new Map<string, string>();
 
+/** True when `dir` is `parent` or sits inside it. Compared segment-wise rather
+ *  than with `startsWith`, so `/a/bc` does not read as being inside `/a/b`. */
 /**
  * Resolve a Claude Code session id to its workspace directory (full path).
  *
@@ -18,6 +20,12 @@ const cache = new Map<string, string>();
  * are cached (the leader resolves once per session as events arrive); misses
  * are not, so a not-yet-flushed transcript resolves on a later event.
  */
+export function isWithinDir(dir: string, parent: string): boolean {
+  if (dir === parent) return true;
+  const rel = path.relative(parent, dir);
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
 export function resolveWorkspace(sessionId: string): string | undefined {
   const cached = cache.get(sessionId);
   if (cached !== undefined) return cached;
