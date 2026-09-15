@@ -8,11 +8,18 @@ import {
   BillingSource,
   ModelRate,
   PriceTable,
+  mergePriceTables,
   normalizeEndpoint,
-  parsePriceTable,
+  parseProviders,
   withEndpointRates,
   withModelRates,
 } from "./pricing";
+import {
+  ByokRecord,
+  findByokRecord,
+  readByokRecords,
+  recordPrices,
+} from "./byokRecords";
 
 // How long a resolved answer is reused. Every input (three settings files, this
 // process's environment, a provider extension's exports) is re-read behind this,
@@ -60,11 +67,19 @@ interface ProviderAnswer {
  * Resolves where Claude Code is sending requests, and at what rates.
  *
  * Claude Code's own precedence is mirrored: a settings file is applied over the
- * process environment unconditionally, and a project file over the user's. The
- * one source that outranks both is a billing-context provider extension, which
- * is also the only thing that can see the fourth configuration route, where the
- * endpoint is injected straight into the Claude binary's environment and appears
- * in no file and in no environment this extension host can read.
+ * process environment unconditionally, and a project file over the user's. Two
+ * sources outrank both, being the only ones that can see the fourth
+ * configuration route, where the endpoint is injected straight into the Claude
+ * binary's environment and appears in no file and in no environment this
+ * extension host can read:
+ *
+ * 1. A BYOK record, consulted first because it is the only source scoped to the
+ *    *session's own* project directory rather than to whichever window happens
+ *    to be reading. See `./byokRecords`.
+ * 2. A billing-context provider extension in this window, which answers for
+ *    this window alone. It is therefore trusted only for a session that this
+ *    window's own folders could plausibly contain, and never for one a record
+ *    has already claimed.
  *
  * Reads are per Claude Code *session project directory*, not per VS Code
  * workspace folder. One window's receiver ingests events from every session on
@@ -82,6 +97,10 @@ export class BillingService implements BillingSource {
   private provider: CachedProvider | undefined;
   private priceTable: PriceTable | undefined;
   private mergedPrices: { at: number; table: PriceTable } | undefined;
+  // The record directory, re-read behind the same cache window as everything
+  // else: one scan serves every api_request in a burst, and a configuration
+  // change in another window takes effect within a couple of seconds.
+  private records: { at: number; list: ByokRecord[] } | undefined;
 
   constructor() {
     this.subscription = vscode.workspace.onDidChangeConfiguration((e) => {
@@ -89,6 +108,7 @@ export class BillingService implements BillingSource {
       this.priceTable = undefined;
       this.mergedPrices = undefined;
       this.provider = undefined;
+      this.records = undefined;
       this.contexts.clear();
       this.emitter.fire();
     });
@@ -115,17 +135,20 @@ export class BillingService implements BillingSource {
       return this.mergedPrices.table;
     }
     if (!this.priceTable) {
-      this.priceTable = parsePriceTable(
+      this.priceTable = parseProviders(
         vscode.workspace
           .getConfiguration("claudeSpeedometer")
-          .get<unknown>("modelPricing")
+          .get<unknown>("providers")
       );
     }
-    // Provider-supplied rates win over the setting: they come from the window
-    // that manages the provider, so unlike a hand-written table they cannot
-    // drift out of date. They are filed under the provider's own endpoint where
-    // it names one, keeping them from pricing another endpoint's history.
-    let table = this.priceTable;
+    // Rates declared in a BYOK record win over the setting: they are generated
+    // by whatever configures that endpoint, so unlike a hand-written table they
+    // cannot drift out of date. Every one is filed under its own endpoint, so
+    // two records on two gateways cannot price each other's turns.
+    let table = mergePriceTables(
+      this.priceTable,
+      recordPrices(this.resolveRecords())
+    );
     const answer = this.resolveProvider();
     if (answer?.pricing && answer.pricing.size > 0) {
       table = answer.endpoint
@@ -136,9 +159,38 @@ export class BillingService implements BillingSource {
     return table;
   }
 
+  /** The live BYOK records, cached for {@link CACHE_MS}. */
+  private resolveRecords(): ByokRecord[] {
+    const now = Date.now();
+    if (this.records && now - this.records.at < CACHE_MS) {
+      return this.records.list;
+    }
+    const list = readByokRecords();
+    this.records = { at: now, list };
+    return list;
+  }
+
   private resolveContext(workspace: string | undefined): BillingContext {
+    // A record is asked for first and taken as final when one covers this
+    // session, being the one source that answers for the session's own project
+    // directory rather than for whoever is reading.
+    const record = findByokRecord(this.resolveRecords(), workspace);
+    if (record) {
+      return {
+        endpoint: record.endpoint,
+        overrideSeen: true,
+        reportedCostIsGuess: record.reportedCostIsGuess,
+      };
+    }
+
+    // An in-window provider speaks only for its own window. Applying its answer
+    // to a session rooted elsewhere is what stamps one window's endpoint onto
+    // another window's traffic, and at that point the figure is not merely
+    // unknown but confidently wrong. A session whose directory has not resolved
+    // yet is the one case with nothing to compare, and there the provider is
+    // still the best answer available.
     const answer = this.resolveProvider();
-    if (answer) {
+    if (answer && (workspace === undefined || this.covers(workspace))) {
       return {
         endpoint: answer.endpoint,
         overrideSeen: true,
@@ -174,6 +226,24 @@ export class BillingService implements BillingSource {
     // An override that fails to parse leaves the endpoint unresolved but still
     // counts as seen, so the model-id fallback stays shut.
     return { endpoint: normalizeEndpoint(raw), overrideSeen };
+  }
+
+  /** True when `workspace` falls inside one of this window's own folders, i.e.
+   *  when a session rooted there could be one this window spawned. Compared
+   *  segment-wise so a sibling directory sharing a name prefix does not match. */
+  private covers(workspace: string): boolean {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const dir = path.resolve(workspace);
+    for (const folder of folders) {
+      if (folder.uri.scheme !== "file") continue;
+      const root = path.resolve(folder.uri.fsPath);
+      if (dir === root) return true;
+      const rel = path.relative(root, dir);
+      if (rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -240,7 +310,10 @@ function readProviderContext(raw: unknown): ProviderAnswer | undefined {
     o.endpoint === null && !reportedCostIsGuess
       ? ANTHROPIC_DEFAULT_ENDPOINT
       : normalizeEndpoint(url);
-  const pricing = parsePriceTable({ byModel: o.pricing }).byModel;
+  // Filed under no endpoint, so the rates land in the model-only table and the
+  // caller decides where to apply them; `parseProviders` also expands whatever
+  // `reportedAs` aliases the provider declared.
+  const pricing = parseProviders({ provider: { models: o.pricing } }).byModel;
   return {
     endpoint,
     reportedCostIsGuess,

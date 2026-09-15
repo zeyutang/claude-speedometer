@@ -272,19 +272,23 @@ export class StatsPanel {
       Monday, This Month, Last Month) are estimates bucketed by UTC day
       (interaction times above are shown in local time) and accrue only from
       when telemetry was enabled. An interaction on a model Claude Code does not
-      recognize is costed from <code>claudeSpeedometer.modelPricing</code>
-      rather than from Claude Code's own figure, which would be its default
-      model's rate. With no matching rate it reads as "unpriced", and any total
-      containing one is marked with a \u2265 instead of counting it as free.</p>`;
+      recognize is costed from <code>claudeSpeedometer.providers</code> rather
+      than from Claude Code's own figure, which would be its default model's
+      rate. Rates are matched against the model id the response reports, which
+      on a gateway that resolves aliases server-side is not the id that was
+      requested; that is what <code>reportedAs</code> is for. With no matching
+      rate it reads as "unpriced", and any total containing one is marked with a
+      \u2265 instead of counting it as free.</p>`;
   }
 }
 
 type KvRow = [string, string] | [string, string, string];
 
 const UNRESOLVED_ENDPOINT_TITLE =
-  "Claude Code's base URL could not be read from any settings file or from " +
-  "this window's environment. Set claudeSpeedometer.modelPricing.byModel to " +
-  "price these interactions.";
+  "Claude Code's base URL could not be read from any settings file, from a " +
+  "BYOK record, or from this window's environment. Add a " +
+  "claudeSpeedometer.providers entry with no endpoint to price these " +
+  "interactions.";
 
 const LOWER_BOUND_TITLE =
   "Lower bound: this window contains interactions with no configured rate, " +
@@ -300,7 +304,7 @@ function latestCostRow(v: TurnView): KvRow {
     return [
       label,
       value,
-      `Recomputed from claudeSpeedometer.modelPricing: Claude Code prices ` +
+      `Recomputed from claudeSpeedometer.providers: Claude Code prices ` +
         `${v.model ?? "this model"} at ${where} against its own default ` +
         `model's rate, so its figure is discarded.`,
     ];
@@ -311,7 +315,9 @@ function latestCostRow(v: TurnView): KvRow {
       value,
       `No rate configured for ${v.model ?? "this model"} at ${where}, and ` +
         `Claude Code's own figure is a guess at Anthropic's rate rather than ` +
-        `what this interaction cost.`,
+        `what this interaction cost. Note the id above is the one the response ` +
+        `reported, which a gateway can resolve away from the one you asked ` +
+        `for; list it under reportedAs if so.`,
     ];
   }
   return [label, value];

@@ -3,20 +3,25 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
-## Unreleased
-
-## 1.8.0 - 2026-09-14
+## 1.8.0 - 2026-09-15
 
 - Interactions on models Claude Code cannot price are no longer costed at Claude's rate, which made a session on another provider report a wrong figure that looked ordinary.
-- Added `claudeSpeedometer.modelPricing`, where you can set per-million-token rates for a provider's models, keyed by base URL or by model id.
+- Added `claudeSpeedometer.providers`, where you can set per-million-token rates for a provider's models, nested provider then model.
   An interaction with no matching rate reads as "unpriced" rather than as free, and any total that leaves one out is marked with a ≥.
+  Matching is exact, with no wildcard: a blanket per-endpoint rate would hide the very mismatch the figure is meant to expose.
 - Cost is now derived when it is displayed, so correcting a rate also corrects the interactions already recorded.
 - The Model section shows the endpoint for an interaction Claude Code could not price itself.
-- A long model id is shortened to the name itself, dropping a provider namespace along with the shared `claude-` prefix, so `accounts/fireworks/models/kimi-k3` reads as `kimi-k3`.
+- A long model id is shortened to the name itself, dropping a provider namespace along with the shared `claude-` prefix, so `accounts/fireworks/models/glm-5p3` reads as `glm-5p3`.
   The stats tab keeps the full id on hover.
 - A base-URL reading that points at Anthropic is no longer believed when the model id on the response is not one Anthropic's API has, so third-party traffic is no longer priced at Claude's rate when the reading is stale or describes another account.
 - Added `claudeSpeedometer.billingContextProvider`, for setups that inject the base URL straight into the Claude Code process.
   An extension in the same window can supply the endpoint and its rates through a `getBillingContext()` export.
+- A model entry can now list the ids it is `reportedAs`, so a rate matches a provider that resolves a router or an alias server-side.
+  This is what left a Fireworks `routers/glm-5p3-fast` interaction unpriced: the response reports `models/glm-5p3` on every streamed request, and Claude Code only ever streams, so a rate written against the requested id could never match.
+- A provider can now declare which project directories it serves, and at what rates, in a BYOK record under `~/.claude-code-byok/`.
+  This costs a session whose base URL this extension cannot read, where before it was attributed to whatever provider was readable and so priced third-party traffic at Claude's rate.
+  Any tool may write one; the format is documented in the README.
+- A `getBillingContext()` export is trusted only for sessions rooted inside its own window's folders, since an extension answers for its own window and applying that to a session belonging to another one would confidently mis-attribute it.
 
 ## 1.7.1 - 2026-08-23
 

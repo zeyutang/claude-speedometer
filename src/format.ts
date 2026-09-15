@@ -74,7 +74,7 @@ export function fmtEndpoint(endpoint: string | undefined): string {
 
 /** A model id as shown in the UI, reduced to the part that identifies the model:
  *  the vendor namespace every id from one provider shares
- *  ("accounts/fireworks/models/kimi-k3" -> "kimi-k3") and the `claude-` prefix
+ *  ("accounts/fireworks/models/glm-5p3" -> "glm-5p3") and the `claude-` prefix
  *  every first-party id shares ("claude-opus-5[1m]" -> "opus-5[1m]"). Neither
  *  distinguishes one row from another, and together they cost more columns than
  *  the name itself in a layout budgeted to the short form. Callers pair it with
@@ -137,7 +137,10 @@ export function fmtClock(ms: number, nowMs: number): string {
       second: "2-digit",
     });
   }
-  const date = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const date = d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
   const time = d.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",

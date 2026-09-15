@@ -71,17 +71,31 @@
           "default": 7,
           "description": "Discard interactions older than this many days from the shared history file (~/.claude-speedometer/state.json)."
         },
-        "claudeSpeedometer.modelPricing": {
+        "claudeSpeedometer.providers": {
           "type": "object",
           "default": {},
-          "markdownDescription": "Rates in USD per million tokens for models Claude Code cannot price, which it otherwise costs at its own default model's rate. `byEndpoint` maps a base URL to the models served there, with `\"*\"` as that endpoint's default. `byModel` applies only when the base URL cannot be resolved. Each rate needs all four figures. An interaction with no matching rate reads as \"unpriced\" rather than as free.",
-          "additionalProperties": false,
-          "properties": {
-            "byEndpoint": {
-              "type": "object",
-              "description": "Base URL, then model id, then rate.",
-              "additionalProperties": {
+          "markdownDescription": "Per-token rates for providers Claude Code cannot price, which it otherwise costs at its own default model's rate. Nested provider then model: the outer key is a name you choose, `endpoint` is the `ANTHROPIC_BASE_URL` its traffic goes to (a string, or a list when one provider answers at several URLs), and `models` maps a model id to its four rates plus any ids the server reports it as. Models are matched exactly, against the id the response carries; there is no wildcard, so a model with no rate reads as \"unpriced\" rather than being absorbed into a blanket figure.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "endpoint": {
+                "description": "The `ANTHROPIC_BASE_URL` this provider is reached at, matched case-insensitively with its path kept. Omit it to have these rates apply only when a turn's base URL cannot be resolved at all.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "models": {
                 "type": "object",
+                "description": "Model id, then its rates.",
                 "additionalProperties": {
                   "type": "object",
                   "required": [
@@ -94,52 +108,31 @@
                   "properties": {
                     "input": {
                       "type": "number",
-                      "minimum": 0
+                      "minimum": 0,
+                      "description": "USD per million input tokens."
                     },
                     "output": {
                       "type": "number",
-                      "minimum": 0
+                      "minimum": 0,
+                      "description": "USD per million output tokens."
                     },
                     "cacheRead": {
                       "type": "number",
-                      "minimum": 0
+                      "minimum": 0,
+                      "description": "USD per million cache-read tokens."
                     },
                     "cacheWrite": {
                       "type": "number",
-                      "minimum": 0
+                      "minimum": 0,
+                      "description": "USD per million cache-write tokens. Not derivable from `input`: Anthropic surcharges a write, a gateway billing only input / cached input / output does not."
+                    },
+                    "reportedAs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Other model ids this rate also applies to, for a provider that resolves the requested id server-side. Fireworks serves `accounts/fireworks/models/glm-5p3` but reports `accounts/fireworks/models/glm-5p3` on every streamed request, and Claude Code only streams, so without the alias the rate never matches."
                     }
-                  }
-                }
-              }
-            },
-            "byModel": {
-              "type": "object",
-              "description": "Model id, then rate.",
-              "additionalProperties": {
-                "type": "object",
-                "required": [
-                  "input",
-                  "output",
-                  "cacheRead",
-                  "cacheWrite"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "input": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "output": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "cacheRead": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "cacheWrite": {
-                    "type": "number",
-                    "minimum": 0
                   }
                 }
               }
