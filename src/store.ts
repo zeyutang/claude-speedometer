@@ -89,7 +89,11 @@ export class SpeedStore extends EventEmitter {
 
   /** Cost summed over today / this week (from Monday) / this month, in USD. */
   getCostWindows(nowMs: number): CostWindows {
-    return costWindows(this.current?.dailyCost, nowMs);
+    return costWindows(
+      this.current?.dailyCost,
+      this.current?.unpricedDays,
+      nowMs
+    );
   }
 
   private readFile(): Snapshot | undefined {

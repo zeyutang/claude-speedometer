@@ -2,7 +2,7 @@
   "name": "claude-speedometer",
   "displayName": "Claude Speedometer",
   "description": "Indicator showing the token throughput and timing of your Claude Code interactions.",
-  "version": "1.7.1",
+  "version": "1.8.4",
   "publisher": "zeyutang",
   "license": "MIT",
   "repository": {
@@ -70,6 +70,79 @@
           "type": "number",
           "default": 7,
           "description": "Discard interactions older than this many days from the shared history file (~/.claude-speedometer/state.json)."
+        },
+        "claudeSpeedometer.providers": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Per-token rates for providers Claude Code cannot price, which it otherwise costs at its own default model's rate. Nested provider then model: the outer key is a name you choose, `endpoint` is the `ANTHROPIC_BASE_URL` its traffic goes to (a string, or a list when one provider answers at several URLs), and `models` maps a model id to its four rates plus any ids the server reports it as. Models are matched exactly, against the id the response carries; there is no wildcard, so a model with no rate reads as \"unpriced\" rather than being absorbed into a blanket figure.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "endpoint": {
+                "description": "The `ANTHROPIC_BASE_URL` this provider is reached at, matched case-insensitively with its path kept. Omit it to have these rates apply only when a turn's base URL cannot be resolved at all.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "models": {
+                "type": "object",
+                "description": "Model id, then its rates.",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": [
+                    "input",
+                    "output",
+                    "cacheRead",
+                    "cacheWrite"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "input": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "USD per million input tokens."
+                    },
+                    "output": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "USD per million output tokens."
+                    },
+                    "cacheRead": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "USD per million cache-read tokens."
+                    },
+                    "cacheWrite": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "USD per million cache-write tokens. Not derivable from `input`: Anthropic surcharges a write, a gateway billing only input / cached input / output does not."
+                    },
+                    "reportedAs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Other model ids this rate also applies to, for a provider that resolves the requested id server-side. Fireworks serves `accounts/fireworks/models/glm-5p3` but reports `accounts/fireworks/models/glm-5p3` on every streamed request, and Claude Code only streams, so without the alias the rate never matches."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "claudeSpeedometer.billingContextProvider": {
+          "type": "string",
+          "default": "auto",
+          "markdownDescription": "Which extension to ask where Claude Code is sending requests. `auto` takes the first extension in this window that exports a `getBillingContext()` function and reports itself armed, `off` asks none, and any other value pins a single extension id."
         }
       }
     }

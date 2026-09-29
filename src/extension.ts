@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { BillingService } from "./billing";
 import { SpeedStore } from "./store";
 import { LeaderManager } from "./leader";
 import { SpeedStatusBar } from "./statusBar";
@@ -13,6 +14,7 @@ import {
 const DONT_ASK_KEY = "claudeSpeedometer.dontAskConfigure";
 
 let store: SpeedStore | undefined;
+let billing: BillingService | undefined;
 let leader: LeaderManager | undefined;
 let statusBar: SpeedStatusBar | undefined;
 let panel: StatsPanel | undefined;
@@ -23,17 +25,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   store = new SpeedStore();
   store.startWatching();
 
-  statusBar = new SpeedStatusBar(store, cfg.statusBarPriority);
-  panel = new StatsPanel(store, (visible) => statusBar?.setActive(visible));
+  billing = new BillingService();
+
+  statusBar = new SpeedStatusBar(store, billing, cfg.statusBarPriority);
+  panel = new StatsPanel(store, billing, (visible) =>
+    statusBar?.setActive(visible)
+  );
 
   // Elect a leader: the window that binds the port runs the receiver and
   // publishes to the shared store. Followers mirror it; on leader close, a
   // follower takes over automatically.
-  leader = new LeaderManager(store, cfg.port, cfg.retentionDays);
+  leader = new LeaderManager(store, cfg.port, cfg.retentionDays, billing);
   await leader.start();
+
+  // A changed price table re-prices retained history, so the leader has to
+  // re-derive and re-share the daily ledger, and this window has to redraw what
+  // it derives locally. Every window sees the event, so the one that happens to
+  // be the leader does the republishing wherever the edit was made.
+  context.subscriptions.push(
+    billing.onDidChange(() => {
+      leader?.republish();
+      statusBar?.refresh();
+      panel?.refresh();
+    })
+  );
 
   context.subscriptions.push(
     statusBar,
+    { dispose: () => billing?.dispose() },
     { dispose: () => panel?.dispose() },
     { dispose: () => leader?.dispose() },
     { dispose: () => store?.dispose() },
@@ -58,6 +77,7 @@ export function deactivate(): void {
   leader?.dispose();
   panel?.dispose();
   statusBar?.dispose();
+  billing?.dispose();
   store?.dispose();
 }
 

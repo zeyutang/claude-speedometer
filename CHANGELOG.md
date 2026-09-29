@@ -3,146 +3,123 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
-## What's next
+## 1.8.4
 
-- Per-window stats: an option to scope the speedometer to the current
-  window's workspace instead of the machine-wide latest interaction.
-- Richer timing (needs Claude Code's tracing beta): time to first token, a
-  decode-only speed, exact per-turn boundaries, and excluding failed or retried
-  calls and tool time from the throughput.
+- An interaction keeps its cost once the rate that priced it is no longer readable, instead of turning `unpriced`.
+  That covers a `~/.claude-code-byok/` record lapsing when the tool that wrote it exits, and a window without the provider extension that supplied the rate, whether it is displaying the interaction or has taken over as leader.
+- An interaction still running when its rate lapses now counts toward the totals, rather than marking the day `≥`.
+- The stats tab no longer credits `claudeSpeedometer.providers` with a rate that a BYOK record or a provider extension supplied.
 
-## 1.7.1 - 2026-08-23
+## 1.8.3
+
+- Today, week and month totals keep accumulating while a rate is missing.
+  1.8.2 held such a day at its last figure, which also held back interactions priced after it, so a total could sit unchanged while spend continued.
+  An interaction now keeps the last cost it was priced at, so the day's figure stays whole and new spend still adds to it.
+- The `≥` marker is reserved for a total genuinely missing an interaction's cost, which now means one that has never had a rate.
+- A project that has billed a provider other than Anthropic is no longer trusted to Anthropic's rate on the strength of a `claude-` model id alone.
+  Deleting that project's `~/.claude-code-byok/` record used to leave its interactions priced as Claude rather than as your provider, with nothing marking the figure as wrong.
+  They now read as `unpriced` until a rate is configured, and setting the project's base URL to Anthropic's own clears the memory.
+
+## 1.8.2
+
+- Today, week and month totals no longer fall when a rate stops resolving.
+  Deleting a `~/.claude-code-byok/` record, or another window taking over as leader without the provider extension that priced those interactions, used to erase cost already recorded for every day inside the retained history.
+  Such a day now keeps its figure and is marked `≥`.
+- A total stops reading as a lower bound once every interaction behind it can be priced again, rather than keeping the `≥` for as long as the day stays in the ledger.
+
+## 1.8.1
+
+- Interactions on models Claude Code cannot price are no longer costed at Claude's rate, which made a session on another provider report a wrong figure that looked ordinary.
+- Added `claudeSpeedometer.providers`, where you can set per-million-token rates for a provider's models, nested provider then model.
+  An interaction with no matching rate reads as "unpriced" rather than as free, and any total that leaves one out is marked with a ≥.
+  Matching is exact, with no wildcard: a blanket per-endpoint rate would hide the very mismatch the figure is meant to expose.
+- Cost is now derived when it is displayed, so correcting a rate also corrects the interactions already recorded.
+- The Model section shows the endpoint for an interaction Claude Code could not price itself.
+- A long model id is shortened to the name itself, dropping a provider namespace along with the shared `claude-` prefix, so `accounts/fireworks/models/glm-5p3` reads as `glm-5p3`.
+  The stats tab keeps the full id on hover.
+- A base-URL reading that points at Anthropic is no longer believed when the model id on the response is not one Anthropic's API has, so third-party traffic is no longer priced at Claude's rate when the reading is stale or describes another account.
+- Added `claudeSpeedometer.billingContextProvider`, for setups that inject the base URL straight into the Claude Code process.
+  An extension in the same window can supply the endpoint and its rates through a `getBillingContext()` export.
+- A model entry can now list the ids it is `reportedAs`, so a rate matches a provider that resolves a router or an alias server-side.
+  This is what left a Fireworks `routers/glm-5p3-fast` interaction unpriced: the response reports `models/glm-5p3` on every streamed request, and Claude Code only ever streams, so a rate written against the requested id could never match.
+- A provider can now declare which project directories it serves, and at what rates, in a BYOK record under `~/.claude-code-byok/`.
+  This costs a session whose base URL this extension cannot read, where before it was attributed to whatever provider was readable and so priced third-party traffic at Claude's rate.
+  Any tool may write one; the format is documented in the README.
+- A `getBillingContext()` export is trusted only for sessions rooted inside its own window's folders, since an extension answers for its own window and applying that to a session belonging to another one would confidently mis-attribute it.
+
+## 1.7.1
 
 - Added a Last Month total to the Cost section.
-- The Recent interactions table drops the shared `claude-` prefix from model ids
-  and gives the freed width to the Workspace column.
+- The Recent interactions table drops the shared `claude-` prefix from model ids and gives the freed width to the Workspace column.
 - The Workspace section shows a longer directory path before ellipsizing.
-- The hover's timestamp moved below the tok/s headline, so a long model id no
-  longer widens the popup.
+- The hover's timestamp moved below the tok/s headline, so a long model id no longer widens the popup.
 
-## 1.7.0 - 2026-08-16
+## 1.7.0
 
-- Interactions are now counted per model. A request Claude Code routes to a
-  different model while your prompt runs, such as the Haiku call that names a
-  new session, gets its own row with its own tokens instead of being merged
-  into your turn and relabelling it.
-- Added a Workspace column to the Recent interactions table, showing the
-  innermost folder of each interaction's directory, with the full path on hover.
-- Tightened the Recent interactions table. Every column is now sized to its
-  content with one shared gutter, so the columns no longer drift apart; token
-  counts take the width they actually reach, timestamps drop the year, and the
-  stats tab is narrower to match. Hover any shortened cell for its full value.
+- Interactions are now counted per model. A request Claude Code routes to a different model while your prompt runs, such as the Haiku call that names a new session, gets its own row with its own tokens instead of being merged into your turn and relabelling it.
+- Added a Workspace column to the Recent interactions table, showing the innermost folder of each interaction's directory, with the full path on hover.
+- Tightened the Recent interactions table. Every column is now sized to its content with one shared gutter, so the columns no longer drift apart; token counts take the width they actually reach, timestamps drop the year, and the stats tab is narrower to match. Hover any shortened cell for its full value.
 
-## 1.6.10 - 2026-07-14
+## 1.6.10
 
 - Refine model name overflow in status bar item display
 
-## 1.6.9 - 2026-07-08
+## 1.6.9
 
 - Refine stats display
 
-## 1.6.6 - 2026-07-05
+## 1.6.6
 
 - Trim status bar item display
 
-## 1.6.4 - 2026-06-21
+## 1.6.4
 
 - UTC time for cost aggregatation
 
-## 1.6.3 - 2026-06-21
+## 1.6.3
 
-- Made the hover overlay interactive: the cursor can now move into the popup
-  (it lingers there instead of vanishing when you leave the bolt), and the
-  overlay gained quick links to open the stats tab and configure telemetry.
-- Added the throughput definition under the headline number in the stats tab,
-  "Output Tokens (Thinking + Text) / Total Request Time", matching the hover.
+- Made the hover overlay interactive: the cursor can now move into the popup (it lingers there instead of vanishing when you leave the bolt), and the overlay gained quick links to open the stats tab and configure telemetry.
+- Added the throughput definition under the headline number in the stats tab, "Output Tokens (Thinking + Text) / Total Request Time", matching the hover.
 
-## 1.6.2 - 2026-06-18
+## 1.6.2
 
-- Moved the status-bar bolt to the far right, immediately left of the
-  notification bell (or rightmost when the bell is hidden). The default
-  `statusBarPriority` is now `-Number.MAX_SAFE_INTEGER`; raise it to move the
-  bolt further left.
-- Gave the bolt a fixed width so it no longer jitters as the speed changes:
-  tok/s now shows one decimal with the integer part padded to three digits.
-  Values of 1,000 tok/s and above gain a thousands separator and widen the
-  item.
+- Moved the status-bar bolt to the far right, immediately left of the notification bell (or rightmost when the bell is hidden). The default `statusBarPriority` is now `-Number.MAX_SAFE_INTEGER`; raise it to move the bolt further left.
+- Gave the bolt a fixed width so it no longer jitters as the speed changes: tok/s now shows one decimal with the integer part padded to three digits. Values of 1,000 tok/s and above gain a thousands separator and widen the item.
 
-## 1.6.1 - 2026-06-13
+## 1.6.1
 
-- Fixed the Cost section showing $0.00 for Today, This Week, and This Month
-  (only the current interaction had a value) after upgrading. The daily ledger
-  used to accrue from live events only, so it started empty and ignored existing
-  history. It now recomputes from the retained turns, banking each day's total
-  with a max so it never shrinks as turns age out, and the leader publishes the
-  rebuilt totals immediately on startup instead of only after the next turn.
+- Fixed the Cost section showing $0.00 for Today, This Week, and This Month (only the current interaction had a value) after upgrading. The daily ledger used to accrue from live events only, so it started empty and ignored existing history. It now recomputes from the retained turns, banking each day's total with a max so it never shrinks as turns age out, and the leader publishes the rebuilt totals immediately on startup instead of only after the next turn.
 
-## 1.6.0 - 2026-06-13
+## 1.6.0
 
-- Added a Cost section (split out from the old "Cost & Model") showing the
-  estimated spend for the current interaction, today, this week (from Monday),
-  and this month. Totals are summed in local time from a small daily ledger that
-  is kept for ~70 days, so they stay accurate even after older turns are pruned.
-  Model, reasoning effort, and Fast mode now live in their own Model section.
-- Interaction times now show the wall-clock time with a live "x ago" hint
-  instead of a relative age that froze at the value captured on the last update.
-  The status-bar overlay and the stats tab refresh on their own so the hint
-  stays current.
-- Raised the retained-turn cap from 50 to 1,000 turns. Age-based retention
-  (default 7 days) still applies, so the effective history is whichever limit is
-  reached first.
+- Added a Cost section (split out from the old "Cost & Model") showing the estimated spend for the current interaction, today, this week (from Monday), and this month. Totals are summed in local time from a small daily ledger that is kept for ~70 days, so they stay accurate even after older turns are pruned. Model, reasoning effort, and Fast mode now live in their own Model section.
+- Interaction times now show the wall-clock time with a live "x ago" hint instead of a relative age that froze at the value captured on the last update. The status-bar overlay and the stats tab refresh on their own so the hint stays current.
+- Raised the retained-turn cap from 50 to 1,000 turns. Age-based retention (default 7 days) still applies, so the effective history is whichever limit is reached first.
 
-## 1.5.5 - 2026-06-13
+## 1.5.5
 
-- The Effort row now appears only when the model supports effort
-  configuration, instead of always showing a placeholder. It is read from
-  Claude Code's telemetry, so models that do not report an effort setting omit
-  the row, the same way Fast mode shows only when it is on.
-- Tidied the stats tab: dropped the throughput formula from under the headline
-  number (it is still in the footnote and the hover overlay) and clarified the
-  token and timing labels.
+- The Effort row now appears only when the model supports effort configuration, instead of always showing a placeholder. It is read from Claude Code's telemetry, so models that do not report an effort setting omit the row, the same way Fast mode shows only when it is on.
+- Tidied the stats tab: dropped the throughput formula from under the headline number (it is still in the footnote and the hover overlay) and clarified the token and timing labels.
 
-## 1.5.4 - 2026-06-12
+## 1.5.4
 
-- Fixed the active-state indicator washing out in light themes. When the stats
-  tab is open the bolt now uses a filled highlight that stays legible in both
-  light and dark themes, instead of a near-white foreground tint that vanished
-  on light backgrounds.
-- Scoped turn completion per session. Two Claude Code panels running at once no
-  longer cut each other's turns short or make the bar flip between them; each
-  session's turn is finalized only when that session starts its next prompt or
-  goes quiet.
-- Made per-turn counts exactly-once. A redelivered telemetry export whose
-  request id was already counted is now ignored, so tokens, duration, and cost
-  are never double-counted.
-- Ordered the Recent list and the "x ago" age by each event's own timestamp
-  rather than the time it was received, so batched exports no longer blur the
-  ordering of close-together turns.
-- Clarified that output tokens, and therefore tok/s, include both thinking and
-  visible text; Claude Code reports a single output count. Relabeled the Output
-  rows and corrected the throughput description (summed per-request wall-clock
-  time, including retries).
+- Fixed the active-state indicator washing out in light themes. When the stats tab is open the bolt now uses a filled highlight that stays legible in both light and dark themes, instead of a near-white foreground tint that vanished on light backgrounds.
+- Scoped turn completion per session. Two Claude Code panels running at once no longer cut each other's turns short or make the bar flip between them; each session's turn is finalized only when that session starts its next prompt or goes quiet.
+- Made per-turn counts exactly-once. A redelivered telemetry export whose request id was already counted is now ignored, so tokens, duration, and cost are never double-counted.
+- Ordered the Recent list and the "x ago" age by each event's own timestamp rather than the time it was received, so batched exports no longer blur the ordering of close-together turns.
+- Clarified that output tokens, and therefore tok/s, include both thinking and visible text; Claude Code reports a single output count. Relabeled the Output rows and corrected the throughput description (summed per-request wall-clock time, including retries).
 
-## 1.5.2 - 2026-06-11
+## 1.5.2
 
-- Removed the time-to-first-token and generation-time readouts and the
-  `speedBasis` setting. Claude Code's telemetry does not report time to first
-  token, so those figures were always empty or identical to total time. The
-  throughput figure is unchanged: output tokens divided by total request time.
+- Removed the time-to-first-token and generation-time readouts and the `speedBasis` setting. Claude Code's telemetry does not report time to first token, so those figures were always empty or identical to total time. The throughput figure is unchanged: output tokens divided by total request time.
 - Renamed the "Total Time" field to "Total Request Time" for precision.
 
-## 1.5.1 - 2026-06-11
+## 1.5.1
 
 Initial public release.
 
-- Status-bar bolt showing the output throughput (`tok/s`) of your latest Claude
-  Code interaction, updated when each turn completes.
-- Hover overlay and a click-to-open stats tab with a per-interaction breakdown:
-  Speed, Tokens, Timing, Cost & Model (including reasoning effort, and Fast mode
-  when active), Recent interactions, and Context (session id and workspace path).
-- One-command telemetry setup (offered on first run): merges the required OTLP
-  environment into `~/.claude/settings.json` without disturbing existing settings.
-- One machine-wide speedometer mirrored across every VS Code window, with
-  automatic leader handover when the receiving window closes.
-- Settings for the receiver port, speed basis, export interval, status-bar
-  priority, and history retention.
+- Status-bar bolt showing the output throughput (`tok/s`) of your latest Claude Code interaction, updated when each turn completes.
+- Hover overlay and a click-to-open stats tab with a per-interaction breakdown: Speed, Tokens, Timing, Cost & Model (including reasoning effort, and Fast mode when active), Recent interactions, and Context (session id and workspace path).
+- One-command telemetry setup (offered on first run): merges the required OTLP environment into `~/.claude/settings.json` without disturbing existing settings.
+- One machine-wide speedometer mirrored across every VS Code window, with automatic leader handover when the receiving window closes.
+- Settings for the receiver port, speed basis, export interval, status-bar priority, and history retention.

@@ -1,5 +1,14 @@
 // Shared types and OTLP value helpers.
 
+import {
+  CostBasis,
+  ModelRate,
+  PriceTable,
+  PricedCost,
+  emptyPriceTable,
+  priceTurn,
+} from "./pricing";
+
 /** A flat attribute bag, merged from a log record's attributes and its
  *  resource attributes. Values are coerced to primitives. */
 export type Attrs = Record<string, string | number | boolean>;
@@ -24,7 +33,35 @@ export interface Turn {
   // timing (ms)
   totalDurationMs: number; // sum of per-request duration_ms (wall-clock, incl. retries)
 
+  // Claude Code's own reported cost, summed, and accumulated only while
+  // costBasis is "upstream". Anywhere else the reported figure is Claude Code's
+  // guess at Anthropic's rate for a model it does not recognize, so it is
+  // dropped at ingest rather than stored where something might later read it.
   costUsd: number;
+  /** Where this row's requests went (normalized base URL), when it could be
+   *  resolved. Stamped at ingest, because every input to it is current
+   *  configuration: deriving it later would re-attribute old turns the moment
+   *  the user switched providers. */
+  endpoint?: string;
+  /** Whether {@link costUsd} is authoritative or the row has to be priced from
+   *  its token counts. Absent on snapshots written before cost attribution
+   *  existed, which {@link priceTurn} reads as "upstream". */
+  costBasis?: CostBasis;
+  /** The rate that last priced this row, kept so the row still prices once no
+   *  source this extension can read publishes one: a BYOK record lapses when
+   *  the tool that wrote it exits, and a provider extension's rates reach only
+   *  its own window. Only ever taken from a rate matching the row's own
+   *  endpoint and model, and dropped if the row is re-attributed, so it never
+   *  prices a request at a rate that did not apply to it. Retained, and so
+   *  reclaimed, with the row, which is as long as anything can re-price it. */
+  lastRate?: ModelRate;
+  /** The last cost this row was priced at locally. Superseded by
+   *  {@link lastRate}, which also prices tokens that arrive after it is taken,
+   *  but still written, because a build that predates the rate reads only this
+   *  figure and may yet take over as leader from this state. Never written from
+   *  an upstream figure: that one is Claude Code's, and memoizing it would
+   *  survive the very reclassification that discards it. */
+  lastPricedUsd?: number;
 
   // identity (part of the key; fixed when the turn is created)
   model?: string;
@@ -99,6 +136,11 @@ export function str(attrs: Attrs, key: string): string | undefined {
 
 /** Serializable shared state written by the leader, read by all windows. */
 export interface Snapshot {
+  // 2 adds the per-turn cost basis and the unpriced-day markers below, 3 the
+  // remembered per-turn cost and the gateway-directory memory, 4 the remembered
+  // per-turn rate. All are additions, so an older build still reads a newer
+  // snapshot and a newer build an older one. Nothing gates on this number,
+  // which is kept as a record.
   version: number;
   updatedMs: number;
   displayId?: string;
@@ -107,6 +149,16 @@ export interface Snapshot {
   // events arrive and kept beyond the per-turn retention, so Today/Week/Month
   // totals stay accurate even after old turns are pruned.
   dailyCost?: Record<string, number>;
+  // UTC days ("YYYY-MM-DD") whose banked total leaves out a turn that no rate,
+  // current or remembered, could put a figure on. Such a turn contributes
+  // nothing, so the day, and any window containing it, is a lower bound rather
+  // than a total.
+  unpricedDays?: string[];
+  // Project directories whose traffic has been attributed anywhere other than
+  // Anthropic, mapped to the epoch ms that was last seen. Persisted because it
+  // has to outlive the turns that evidenced it: the gap it closes opens exactly
+  // when the configuration naming the gateway has gone missing.
+  gatewayWorkspaces?: Record<string, number>;
 }
 
 /** UTC calendar-day key ("YYYY-MM-DD") for an epoch-ms instant. */
@@ -118,13 +170,21 @@ export function utcDayKey(ms: number): string {
   return `${y}-${m}-${day}`;
 }
 
+/** One window's spend. `lowerBound` marks a total that is missing the cost of
+ *  at least one turn no rate could put a figure on, so it understates by an
+ *  unknown amount rather than being merely approximate. */
+export interface CostWindow {
+  usd: number;
+  lowerBound: boolean;
+}
+
 /** Cost (USD) summed over the day, the week (from Monday), the month, and the
  *  whole of the preceding calendar month. */
 export interface CostWindows {
-  today: number;
-  week: number;
-  month: number;
-  lastMonth: number;
+  today: CostWindow;
+  week: CostWindow;
+  month: CostWindow;
+  lastMonth: CostWindow;
 }
 
 /** Sum a daily-cost ledger into Today / This Week (Monday-start) / This Month /
@@ -133,10 +193,20 @@ export interface CostWindows {
  *  above by the first of this month, it stops growing once the month turns. */
 export function costWindows(
   daily: Record<string, number> | undefined,
+  unpricedDays: readonly string[] | undefined,
   nowMs: number
 ): CostWindows {
-  const out: CostWindows = { today: 0, week: 0, month: 0, lastMonth: 0 };
-  if (!daily) return out;
+  const out: CostWindows = {
+    today: { usd: 0, lowerBound: false },
+    week: { usd: 0, lowerBound: false },
+    month: { usd: 0, lowerBound: false },
+    lastMonth: { usd: 0, lowerBound: false },
+  };
+  const unpriced = new Set(unpricedDays ?? []);
+  // A day every one of whose turns went unpriced banks no dollars at all, so it
+  // has no entry in the ledger and still has to reach its windows as a marker.
+  const days = new Set([...Object.keys(daily ?? {}), ...unpriced]);
+  if (days.size === 0) return out;
   const now = new Date(nowMs);
   const todayKey = utcDayKey(nowMs);
   const dow = (now.getUTCDay() + 6) % 7; // days since Monday (0 = Monday)
@@ -154,11 +224,17 @@ export function costWindows(
   const lastMonthKey = utcDayKey(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)
   );
-  for (const [key, cost] of Object.entries(daily)) {
-    if (key === todayKey) out.today += cost;
-    if (key >= mondayKey) out.week += cost;
-    if (key >= monthKey) out.month += cost;
-    else if (key >= lastMonthKey) out.lastMonth += cost;
+  const add = (w: CostWindow, usd: number, lowerBound: boolean): void => {
+    w.usd += usd;
+    if (lowerBound) w.lowerBound = true;
+  };
+  for (const key of days) {
+    const usd = daily?.[key] ?? 0;
+    const lb = unpriced.has(key);
+    if (key === todayKey) add(out.today, usd, lb);
+    if (key >= mondayKey) add(out.week, usd, lb);
+    if (key >= monthKey) add(out.month, usd, lb);
+    else if (key >= lastMonthKey) add(out.lastMonth, usd, lb);
   }
   return out;
 }
@@ -199,7 +275,9 @@ export interface TurnView {
 
   totalTokPerSec: number;
 
-  costUsd: number;
+  cost: PricedCost;
+  endpoint?: string;
+  costBasis?: CostBasis;
   model?: string;
   speed?: string;
   effort?: string;
@@ -210,7 +288,18 @@ export interface TurnView {
   lastMs: number; // wall-clock ms of the most recent event (for absolute time)
 }
 
-export function viewOf(t: Turn, nowMs: number): TurnView {
+// Shared rather than built per call: a price table is only ever read, and this
+// is the default on a function the recent-interactions list calls per row.
+const NO_PRICES: PriceTable = emptyPriceTable();
+
+/** `prices` is what turns a row Claude Code could not price into a figure. Omit
+ *  it when only the non-cost fields are read, and every such row reads as
+ *  unpriced. */
+export function viewOf(
+  t: Turn,
+  nowMs: number,
+  prices: PriceTable = NO_PRICES
+): TurnView {
   const totalSec = t.totalDurationMs / 1000;
   return {
     outputTokens: t.outputTokens,
@@ -225,7 +314,9 @@ export function viewOf(t: Turn, nowMs: number): TurnView {
     totalMs: t.totalDurationMs,
     requests: t.requests,
     totalTokPerSec: totalSec > 0 ? t.outputTokens / totalSec : 0,
-    costUsd: t.costUsd,
+    cost: priceTurn(t, prices),
+    endpoint: t.endpoint,
+    costBasis: t.costBasis,
     model: t.model,
     speed: t.speed,
     effort: t.effort,

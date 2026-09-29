@@ -1,9 +1,13 @@
 import * as vscode from "vscode";
+import { BillingService } from "./billing";
 import { SpeedStore } from "./store";
 import {
-  fmtCost,
+  fmtCostWindow,
   fmtEffort,
+  fmtEndpoint,
   fmtInt,
+  fmtModel,
+  fmtPricedCost,
   fmtTime,
   fmtTimestamp,
   fmtTimestampShort,
@@ -11,7 +15,7 @@ import {
   fmtWhen,
   isFastModeOn,
 } from "./format";
-import { CostWindows, Turn, TurnView, viewOf } from "./types";
+import { CostWindow, CostWindows, Turn, TurnView, viewOf } from "./types";
 
 /**
  * The stats tab opened by clicking the bolt. Opens in the active editor group,
@@ -35,6 +39,7 @@ export class StatsPanel {
 
   constructor(
     private readonly store: SpeedStore,
+    private readonly billing: BillingService,
     private readonly onVisibilityChange: (visible: boolean) => void
   ) {
     this.store.on("update", () => {
@@ -72,6 +77,12 @@ export class StatsPanel {
     this.panel = undefined;
   }
 
+  /** Redraw outside the usual triggers, for a change (an edited price table)
+   *  that alters what is rendered without altering the shared state. */
+  refresh(): void {
+    if (this.panel) this.panel.webview.html = this.render();
+  }
+
   private stopTimer(): void {
     if (this.timer) {
       clearInterval(this.timer);
@@ -84,8 +95,9 @@ export class StatsPanel {
     const latest = this.store.getLatest();
     const recent = this.store.getRecent(20);
     const cost = this.store.getCostWindows(now);
+    const prices = this.billing.prices();
     const body = latest
-      ? this.renderTurn(viewOf(latest, now), recent, now, cost)
+      ? this.renderTurn(viewOf(latest, now, prices), recent, now, cost)
       : this.renderEmpty();
     return wrapHtml(body);
   }
@@ -112,10 +124,10 @@ export class StatsPanel {
         const rv = viewOf(t, now);
         const session = rv.sessionId ? rv.sessionId.slice(0, 8) : "-";
         const model = rv.model ?? "-";
-        // Model column reads e.g. "opus-4-8 | max": drop the "claude-" prefix,
-        // which every id shares and so distinguishes nothing, and append the
-        // lowercased effort level. The title keeps the full id for hover.
-        const modelShort = model.replace(/^claude-/, "");
+        // Model column reads e.g. "opus-4-8 | max": the shortened id (see
+        // fmtModel) plus the lowercased effort level. The title keeps the full
+        // id for hover.
+        const modelShort = fmtModel(rv.model);
         const effort = rv.effort ? rv.effort.toLowerCase() : "";
         const modelCell = effort ? `${modelShort} | ${effort}` : modelShort;
         const modelTitle = effort ? `${model} | ${effort}` : model;
@@ -175,17 +187,23 @@ export class StatsPanel {
       <hr />
       <h3>Cost (estimated, UTC-bucketed)</h3>
       ${kv([
-        ["Latest Interaction", fmtCost(v.costUsd)],
-        ["Today", fmtCost(cost.today)],
-        ["This Week", fmtCost(cost.week)],
-        ["This Month", fmtCost(cost.month)],
-        ["Last Month", fmtCost(cost.lastMonth)],
+        latestCostRow(v),
+        windowRow("Today", cost.today),
+        windowRow("This Week", cost.week),
+        windowRow("This Month", cost.month),
+        windowRow("Last Month", cost.lastMonth),
       ])}
 
       <hr />
       <h3>Model</h3>
       ${kv([
-        ["Model", v.model ?? "-"],
+        // The full id, which the shortened form drops a namespace from, is the
+        // hover title.
+        ["Model", fmtModel(v.model), v.model ?? "-"],
+        // Endpoint row appears only for a turn Claude Code could not price
+        // itself, where which endpoint served it is what decides the figure
+        // above. A first-party turn has nothing to disambiguate.
+        ...(v.costBasis === "local" ? [endpointRow(v)] : []),
         // Effort row appears only when the model reports an effort setting;
         // models that don't support effort configuration omit the attribute.
         ...(v.effort
@@ -242,22 +260,83 @@ export class StatsPanel {
         </tr></thead>
         <tbody>${recentRows}</tbody>
       </table>
-      <p class="muted note">Each row aggregates the API calls (including tool
-      steps) one prompt made to one model. Requests Claude Code routes to a
-      different model while a prompt runs, such as the Haiku call that names a
-      new session, therefore get their own row instead of adding their tokens to
-      yours. Output tokens include both thinking and visible text (the API does
-      not separate them), and Speed (tok/s) is output over summed per-request
-      time. Stats are global across all Claude Code sessions (each tracked
-      separately, so concurrent sessions don't cut each other's turns short),
-      not filtered to this VS Code window. Cost totals (Today, This Week from
-      Monday, This Month, Last Month) are estimates bucketed by UTC day
-      (interaction times above are shown in local time) and accrue only from
-      when telemetry was enabled.</p>`;
+      <p class="muted note">Each row is one prompt's API calls to one model, so
+      a helper call on another model, such as the Haiku call that names a
+      session, gets its own row. Stats span all Claude Code sessions, not just
+      this window. Cost totals accrue from when telemetry was enabled, and weeks
+      start on Monday. Interactions Claude Code cannot price are costed from
+      configured rates. One with no rate reads "unpriced", and any total that
+      includes it is marked \u2265.</p>`;
   }
 }
 
-function kv(rows: Array<[string, string] | [string, string, string]>): string {
+type KvRow = [string, string] | [string, string, string];
+
+const UNRESOLVED_ENDPOINT_TITLE =
+  "Claude Code's base URL could not be read from any settings file, from a " +
+  "BYOK record, or from this window's environment. Add a " +
+  "claudeSpeedometer.providers entry with no endpoint to price these " +
+  "interactions.";
+
+const LOWER_BOUND_TITLE =
+  "Lower bound: this window contains interactions that have never had a " +
+  "configured rate, which contribute nothing to the total.";
+
+/** The latest turn's cost, with hover text saying where the number came from
+ *  (or why there is none), so a recomputed, remembered or missing figure
+ *  explains itself. */
+function latestCostRow(v: TurnView): KvRow {
+  const label = "Latest Interaction";
+  const value = fmtPricedCost(v.cost);
+  const where = v.endpoint ? fmtEndpoint(v.endpoint) : "an unresolved endpoint";
+  if (v.cost.state === "recomputed") {
+    return [
+      label,
+      value,
+      `Recomputed from the rate that claudeSpeedometer.providers, a BYOK ` +
+        `record or a provider extension declares for ` +
+        `${v.model ?? "this model"} at ${where}. Claude Code's own figure ` +
+        `assumes Anthropic's rates (its default model's, for a model it does ` +
+        `not recognize), so it is discarded.`,
+    ];
+  }
+  if (v.cost.state === "remembered") {
+    return [
+      label,
+      value,
+      `Priced at the rate that last applied to ${v.model ?? "this model"} ` +
+        `at ${where}. No current rate is readable from this window, as when ` +
+        `the tool that wrote a BYOK record has exited or the rate came from ` +
+        `a provider extension in another window.`,
+    ];
+  }
+  if (v.cost.state === "unpriced") {
+    return [
+      label,
+      value,
+      `No rate configured for ${v.model ?? "this model"} at ${where}, and ` +
+        `Claude Code's own figure is a guess at Anthropic's rate rather than ` +
+        `what this interaction cost. Note the id above is the one the response ` +
+        `reported, which a gateway can resolve away from the one you asked ` +
+        `for; list it under reportedAs if so.`,
+    ];
+  }
+  return [label, value];
+}
+
+function windowRow(label: string, w: CostWindow): KvRow {
+  const value = fmtCostWindow(w);
+  return w.lowerBound ? [label, value, LOWER_BOUND_TITLE] : [label, value];
+}
+
+/** The base URL, hovering to the full form the display drops the scheme from,
+ *  or to an explanation when there was none to resolve. */
+function endpointRow(v: TurnView): KvRow {
+  const title = v.endpoint ?? UNRESOLVED_ENDPOINT_TITLE;
+  return ["Endpoint", fmtEndpoint(v.endpoint), title];
+}
+
+function kv(rows: KvRow[]): string {
   return `<div class="kv">${rows
     .map(([k, val, title]) => {
       const t = title ? ` title="${escapeHtml(title)}"` : "";

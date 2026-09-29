@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { BillingService } from "./billing";
 import { SpeedStore } from "./store";
 import { fmtTokPerSecFixed } from "./format";
 import { viewOf } from "./types";
@@ -21,6 +22,7 @@ export class SpeedStatusBar {
 
   constructor(
     private readonly store: SpeedStore,
+    private readonly billing: BillingService,
     priority: number
   ) {
     this.item = vscode.window.createStatusBarItem(
@@ -41,6 +43,12 @@ export class SpeedStatusBar {
     this.render();
   }
 
+  /** Rebuild outside the usual triggers, for a change (an edited price table)
+   *  that alters the hover without altering the shared state. */
+  refresh(): void {
+    this.render();
+  }
+
   private render(): void {
     const turn = this.store.getLatest();
     const speedStr = fmtTokPerSecFixed(
@@ -56,7 +64,7 @@ export class SpeedStatusBar {
     this.item.backgroundColor = this.active
       ? new vscode.ThemeColor("statusBarItem.warningBackground")
       : undefined;
-    this.item.tooltip = buildTooltip(this.store);
+    this.item.tooltip = buildTooltip(this.store, this.billing);
   }
 
   dispose(): void {
