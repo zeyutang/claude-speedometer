@@ -175,7 +175,8 @@ That is the whole of it, and it does not expire.
 The file is read with `JSON.parse`, so no comments and no trailing commas.
 
 Two further fields exist for an automated writer and are not worth setting by hand.
-`pid` and `updatedMs` together express a lease: a record naming a live process, with a timestamp refreshed often enough to still look current, applies only while that process is around, so a tool that exits stops affecting the figures whether or not it cleaned up.
+`pid` and `updatedMs` together express a lease: a record naming a live process, with a timestamp refreshed often enough to still look current, applies only while that process is around, so a tool that exits stops claiming new sessions whether or not it cleaned up.
+Interactions it has already priced keep that rate for as long as they are retained, so they do not turn `unpriced` when the record lapses.
 Each is checked only when present, which is why the record above, declaring neither, is a standing declaration instead.
 
 **`projectDirs` is the only thing a session is matched on**, and a session matches when its own project directory is one of them or sits inside one, the longest match winning.

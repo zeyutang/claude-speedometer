@@ -3,6 +3,13 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
+## 1.8.4
+
+- An interaction keeps its cost once the rate that priced it is no longer readable, instead of turning `unpriced`.
+  That covers a `~/.claude-code-byok/` record lapsing when the tool that wrote it exits, and a window without the provider extension that supplied the rate, whether it is displaying the interaction or has taken over as leader.
+- An interaction still running when its rate lapses now counts toward the totals, rather than marking the day `≥`.
+- The stats tab no longer credits `claudeSpeedometer.providers` with a rate that a BYOK record or a provider extension supplied.
+
 ## 1.8.3
 
 - Today, week and month totals keep accumulating while a rate is missing.

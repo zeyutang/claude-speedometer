@@ -260,25 +260,13 @@ export class StatsPanel {
         </tr></thead>
         <tbody>${recentRows}</tbody>
       </table>
-      <p class="muted note">Each row aggregates the API calls (including tool
-      steps) one prompt made to one model. Requests Claude Code routes to a
-      different model while a prompt runs, such as the Haiku call that names a
-      new session, therefore get their own row instead of adding their tokens to
-      yours. Output tokens include both thinking and visible text (the API does
-      not separate them), and Speed (tok/s) is output over summed per-request
-      time. Stats are global across all Claude Code sessions (each tracked
-      separately, so concurrent sessions don't cut each other's turns short),
-      not filtered to this VS Code window. Cost totals (Today, This Week from
-      Monday, This Month, Last Month) are estimates bucketed by UTC day
-      (interaction times above are shown in local time) and accrue only from
-      when telemetry was enabled. An interaction on a model Claude Code does not
-      recognize is costed from <code>claudeSpeedometer.providers</code> rather
-      than from Claude Code's own figure, which would be its default model's
-      rate. Rates are matched against the model id the response reports, which
-      on a gateway that resolves aliases server-side is not the id that was
-      requested; that is what <code>reportedAs</code> is for. With no matching
-      rate it reads as "unpriced", and any total containing one is marked with a
-      \u2265 instead of counting it as free.</p>`;
+      <p class="muted note">Each row is one prompt's API calls to one model, so
+      a helper call on another model, such as the Haiku call that names a
+      session, gets its own row. Stats span all Claude Code sessions, not just
+      this window. Cost totals accrue from when telemetry was enabled, and weeks
+      start on Monday. Interactions Claude Code cannot price are costed from
+      configured rates. One with no rate reads "unpriced", and any total that
+      includes it is marked \u2265.</p>`;
   }
 }
 
@@ -295,7 +283,8 @@ const LOWER_BOUND_TITLE =
   "configured rate, which contribute nothing to the total.";
 
 /** The latest turn's cost, with hover text saying where the number came from
- *  (or why there is none), so a recomputed or missing figure explains itself. */
+ *  (or why there is none), so a recomputed, remembered or missing figure
+ *  explains itself. */
 function latestCostRow(v: TurnView): KvRow {
   const label = "Latest Interaction";
   const value = fmtPricedCost(v.cost);
@@ -304,9 +293,21 @@ function latestCostRow(v: TurnView): KvRow {
     return [
       label,
       value,
-      `Recomputed from claudeSpeedometer.providers: Claude Code prices ` +
-        `${v.model ?? "this model"} at ${where} against its own default ` +
-        `model's rate, so its figure is discarded.`,
+      `Recomputed from the rate that claudeSpeedometer.providers, a BYOK ` +
+        `record or a provider extension declares for ` +
+        `${v.model ?? "this model"} at ${where}. Claude Code's own figure ` +
+        `assumes Anthropic's rates (its default model's, for a model it does ` +
+        `not recognize), so it is discarded.`,
+    ];
+  }
+  if (v.cost.state === "remembered") {
+    return [
+      label,
+      value,
+      `Priced at the rate that last applied to ${v.model ?? "this model"} ` +
+        `at ${where}. No current rate is readable from this window, as when ` +
+        `the tool that wrote a BYOK record has exited or the rate came from ` +
+        `a provider extension in another window.`,
     ];
   }
   if (v.cost.state === "unpriced") {

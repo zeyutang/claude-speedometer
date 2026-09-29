@@ -149,11 +149,18 @@ export class Aggregator extends EventEmitter {
       turn.workspace = workspace;
       const ctx = this.contextFor(turn.model, workspace);
       if (costBasisFor(turn.model, ctx) === "local") {
+        // Whatever was remembered under the earlier reading priced the row as
+        // if its requests had gone somewhere they did not.
+        if (turn.endpoint !== ctx.endpoint) {
+          turn.lastRate = undefined;
+          turn.lastPricedUsd = undefined;
+        }
         turn.endpoint = ctx.endpoint;
         if (turn.costBasis !== "local") {
           turn.costBasis = "local";
           turn.costUsd = 0;
         }
+        this.rememberRate(turn);
       }
     }
 
@@ -282,9 +289,21 @@ export class Aggregator extends EventEmitter {
         terminalType: str(attrs, "terminal.type"),
         workspace,
       };
+      // Remembered at creation as well as at each bank, since a row is created
+      // while whatever attributed it is live. One whose window closes before
+      // the ledger next banks, a prompt still running at the time for
+      // instance, would otherwise never price.
+      this.rememberRate(t);
       this.turns.set(key, t);
     }
     return t;
+  }
+
+  /** Remember the rate that prices `t` now, if one does. See
+   *  {@link Turn.lastRate}. */
+  private rememberRate(t: Turn): void {
+    const cost = priceTurn(t, this.billing.prices());
+    if (cost.state === "recomputed") t.lastRate = cost.rate;
   }
 
   /**
@@ -326,8 +345,8 @@ export class Aggregator extends EventEmitter {
    * cost. Cost is derived here rather than at ingest so that a later edit to the
    * price table reaches history instead of only new turns.
    *
-   * A turn that priced once keeps that figure in {@link Turn.lastPricedUsd} and
-   * contributes it for as long as it is retained, so a rate that goes missing
+   * A turn that priced once keeps the rate in {@link Turn.lastRate} and is
+   * costed from it for as long as it is retained, so a rate that goes missing
    * leaves the day's sum where it was. Without that memo a removed
    * `~/.claude-code-byok/` record, or a leadership handover to a window that
    * cannot see the provider, revalued the day's turns at zero, and the sum is
@@ -356,15 +375,7 @@ export class Aggregator extends EventEmitter {
       if (t.lastMs < oldestMs) oldestMs = t.lastMs;
       const key = utcDayKey(t.lastMs);
       const cost = priceTurn(t, prices);
-      let usd: number | undefined;
-      if (cost.state === "recomputed") {
-        usd = t.lastPricedUsd = cost.usd;
-      } else if (cost.state === "upstream") {
-        usd = cost.usd;
-      } else {
-        usd = t.lastPricedUsd;
-      }
-      if (usd === undefined) {
+      if (cost.state === "unpriced") {
         // A turn that consumed no tokens costs nothing under any rate, so it is
         // no reason to call the day's total a lower bound.
         const tokens =
@@ -375,7 +386,9 @@ export class Aggregator extends EventEmitter {
         if (tokens > 0) unpriced.add(key);
         continue;
       }
-      if (usd) fromTurns.set(key, (fromTurns.get(key) ?? 0) + usd);
+      if (cost.state === "recomputed") t.lastRate = cost.rate;
+      if (cost.state !== "upstream") t.lastPricedUsd = cost.usd;
+      if (cost.usd) fromTurns.set(key, (fromTurns.get(key) ?? 0) + cost.usd);
     }
     // Bounded by the retention cutoff as well as by the oldest retained turn,
     // because two turns outlive pruning by age (the displayed row and any still
@@ -501,7 +514,7 @@ export class Aggregator extends EventEmitter {
     this.pruneDailyCost();
     this.pruneGatewayWorkspaces();
     return {
-      version: 3,
+      version: 4,
       updatedMs: Date.now(),
       displayId: this.displayId,
       turns: [...this.turns.values()],

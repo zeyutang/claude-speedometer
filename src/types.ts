@@ -2,6 +2,7 @@
 
 import {
   CostBasis,
+  ModelRate,
   PriceTable,
   PricedCost,
   emptyPriceTable,
@@ -46,12 +47,20 @@ export interface Turn {
    *  its token counts. Absent on snapshots written before cost attribution
    *  existed, which {@link priceTurn} reads as "upstream". */
   costBasis?: CostBasis;
-  /** The last cost successfully recomputed for this row, remembered so that a
-   *  rate going missing does not silently revalue the row at zero. Only ever
-   *  written from a "recomputed" figure: an upstream one is Claude Code's, and
-   *  memoizing it would survive the very reclassification that discards it.
-   *  Read by the daily ledger, never by the display, which keeps saying
-   *  "unpriced" rather than presenting a stale rate as current. */
+  /** The rate that last priced this row, kept so the row still prices once no
+   *  source this extension can read publishes one: a BYOK record lapses when
+   *  the tool that wrote it exits, and a provider extension's rates reach only
+   *  its own window. Only ever taken from a rate matching the row's own
+   *  endpoint and model, and dropped if the row is re-attributed, so it never
+   *  prices a request at a rate that did not apply to it. Retained, and so
+   *  reclaimed, with the row, which is as long as anything can re-price it. */
+  lastRate?: ModelRate;
+  /** The last cost this row was priced at locally. Superseded by
+   *  {@link lastRate}, which also prices tokens that arrive after it is taken,
+   *  but still written, because a build that predates the rate reads only this
+   *  figure and may yet take over as leader from this state. Never written from
+   *  an upstream figure: that one is Claude Code's, and memoizing it would
+   *  survive the very reclassification that discards it. */
   lastPricedUsd?: number;
 
   // identity (part of the key; fixed when the turn is created)
@@ -128,9 +137,10 @@ export function str(attrs: Attrs, key: string): string | undefined {
 /** Serializable shared state written by the leader, read by all windows. */
 export interface Snapshot {
   // 2 adds the per-turn cost basis and the unpriced-day markers below, 3 the
-  // remembered per-turn cost and the gateway-directory memory. All are
-  // additions, so an older build still reads a newer snapshot and a newer build
-  // an older one. Nothing gates on this number, which is kept as a record.
+  // remembered per-turn cost and the gateway-directory memory, 4 the remembered
+  // per-turn rate. All are additions, so an older build still reads a newer
+  // snapshot and a newer build an older one. Nothing gates on this number,
+  // which is kept as a record.
   version: number;
   updatedMs: number;
   displayId?: string;

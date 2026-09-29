@@ -113,14 +113,20 @@ export interface CostInputs {
   outputTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+  lastRate?: ModelRate;
+  lastPricedUsd?: number;
 }
 
-/** A turn's cost and where the number came from. `unpriced` carries no figure
- *  at all: rendering it as $0.00, or falling back to the upstream guess, would
- *  turn a visible gap back into an invisible error. */
+/** A turn's cost and where the number came from. `recomputed` carries the rate
+ *  it was computed at, so the caller can remember it, and `remembered` is
+ *  costed at the rate that last priced the turn, no current one being
+ *  readable. `unpriced` carries no figure at all: rendering it as $0.00, or
+ *  falling back to the upstream guess, would turn a visible gap back into an
+ *  invisible error. */
 export type PricedCost =
   | { state: "upstream"; usd: number }
-  | { state: "recomputed"; usd: number }
+  | { state: "recomputed"; usd: number; rate: ModelRate }
+  | { state: "remembered"; usd: number }
   | { state: "unpriced" };
 
 /**
@@ -337,6 +343,14 @@ export function computeCost(t: CostInputs, r: ModelRate): number {
  * What to show for a turn's cost, derived at render time rather than baked at
  * ingest: turns are retained for days, so a later correction to the price table
  * has to be able to fix history that was already recorded.
+ *
+ * A rate readable now always wins, so a correction still reaches history. Only
+ * when none is does the turn fall back to the rate that last priced it, and
+ * that is routine rather than an error: a BYOK record lapses once the tool that
+ * wrote it exits, and a provider extension's rates are readable only in its own
+ * window. The remembered rate is the one in force for the turn's own requests,
+ * or a later correction to it, so pricing from it passes no stale rate off as
+ * current, and it reaches no turn it did not already price.
  */
 export function priceTurn(t: CostInputs, prices: PriceTable): PricedCost {
   // Absent on snapshots written before cost attribution existed. Those turns
@@ -346,8 +360,15 @@ export function priceTurn(t: CostInputs, prices: PriceTable): PricedCost {
     return { state: "upstream", usd: t.costUsd };
   }
   const rate = lookupRate(prices, t.endpoint, t.model);
-  if (!rate) return { state: "unpriced" };
-  return { state: "recomputed", usd: computeCost(t, rate) };
+  if (rate) return { state: "recomputed", usd: computeCost(t, rate), rate };
+  if (t.lastRate) {
+    return { state: "remembered", usd: computeCost(t, t.lastRate) };
+  }
+  // Banked by a build that remembered the figure but not the rate.
+  if (t.lastPricedUsd !== undefined) {
+    return { state: "remembered", usd: t.lastPricedUsd };
+  }
+  return { state: "unpriced" };
 }
 
 /** One rate object from configuration, or undefined if it is not four finite,
