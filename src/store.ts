@@ -2,6 +2,7 @@ import { EventEmitter } from "events";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { sweepDeadPidFiles, writeFileAtomic } from "./pidFiles";
 import {
   CostWindows,
   Snapshot,
@@ -16,6 +17,8 @@ import {
 const DIR = path.join(os.homedir(), ".claude-speedometer");
 const FILE = path.join(DIR, "state.json");
 const BASENAME = "state.json";
+// The temporary files `writeFileAtomic` renames into place, by writer pid.
+const TEMP_NAME = /^state\.json\.(\d+)\.tmp$/;
 
 /**
  * Machine-wide shared state, persisted to a single small file (bounded to the
@@ -39,10 +42,12 @@ export class SpeedStore extends EventEmitter {
   /** Begin watching the shared file; emits "update" on external changes. */
   startWatching(): void {
     try {
-      fs.mkdirSync(DIR, { recursive: true });
+      fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
     } catch {
       /* ignore */
     }
+    // Reclaim what a window that crashed mid-write left behind.
+    sweepDeadPidFiles(DIR, TEMP_NAME);
     try {
       this.watcher = fs.watch(DIR, (_event, filename) => {
         // Ignore the leader's temp files; only react to the state file itself.
@@ -64,10 +69,10 @@ export class SpeedStore extends EventEmitter {
   /** Leader-only: publish a new snapshot atomically and update local UI. */
   write(snap: Snapshot): void {
     try {
-      fs.mkdirSync(DIR, { recursive: true });
-      const tmp = `${FILE}.${process.pid}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(snap), "utf8");
-      fs.renameSync(tmp, FILE);
+      fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
+      // Readable by this account alone, like the relays: it names every
+      // project directory and session the receiver has seen.
+      writeFileAtomic(FILE, JSON.stringify(snap), 0o600);
       this.current = snap;
       this.emit("update");
     } catch {

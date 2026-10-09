@@ -195,9 +195,17 @@ An endpoint, its model ids and their rates are all that pricing a turn requires.
 
 | Setting                                    | Default                    | Meaning                                                                                                                                          |
 | ------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `claudeSpeedometer.port`                   | `4318`                     | Port the receiver listens on. Must match the OTLP endpoint and be the same in every editor on this machine. |
+| `claudeSpeedometer.port`                   | `4318`                     | Port the receiver listens on. Must match the OTLP endpoint and be the same in every editor on this machine.                                      |
 | `claudeSpeedometer.exportIntervalMs`       | `2000`                     | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive.                                                                 |
 | `claudeSpeedometer.statusBarPriority`      | `-Number.MAX_SAFE_INTEGER` | Position in the right cluster. Higher = further left; the default pins the bolt at the far right, immediately left of the notification bell.     |
-| `claudeSpeedometer.retentionDays`          | `7`                        | Discard interactions older than this many days.                                                                                                  |
+| `claudeSpeedometer.retentionDays`          | `7`                        | Discard interactions older than this many days. Daily cost totals, and which projects billed another provider, are kept for 95 days.             |
 | `claudeSpeedometer.providers`              | `{}`                       | Rates for providers Claude Code cannot price, nested provider then model. See [Pricing a Third-Party Provider](#pricing-a-third-party-provider). |
 | `claudeSpeedometer.billingContextProvider` | `auto`                     | Which extension to ask where Claude Code is sending requests. `off` asks none, and any other value pins one extension id.                        |
+
+## Uninstalling
+
+Uninstalling leaves two things in place, since another editor may still run the extension and Claude Code's telemetry may serve something else.
+To remove them as well:
+
+1. Delete `~/.claude-speedometer/`, the history every window shares, once no editor on the machine runs the extension.
+2. Remove the five entries [Setup](#setup) added to the `env` block of `~/.claude/settings.json`, then restart Claude Code.

@@ -26,10 +26,13 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { ModelRate } from "./pricing";
-import { ByokRecord, isLive, readRecordsIn } from "./byokRecords";
+import { ByokRecord, readRecordsIn } from "./byokRecords";
+import { sweepDeadPidFiles, writeFileAtomic } from "./pidFiles";
 
 const RELAY_DIR = path.join(os.homedir(), ".claude-speedometer", "windows");
 const OWN_FILE = path.join(RELAY_DIR, `${process.pid}.json`);
+// A relay, or the temporary file it is written through, by its writer's pid.
+const RELAY_NAME = /^(\d+)\.json(?:\..+)?$/;
 
 /** How often a window re-reads its provider, rewriting its relay when the
  *  answer changed. Short, because a turn's endpoint is stamped when the turn
@@ -63,6 +66,12 @@ export class ProviderRelay {
   // every tick.
   private written: { body: string; at: number } | undefined;
 
+  constructor() {
+    // Swept at startup as well as after each write, so a crashed window's
+    // relay is reclaimed even while no window has a provider to publish.
+    pruneDeadRelays();
+  }
+
   /** Write this window's answer for its `dirs`, or remove the relay when there
    *  is no answer, or no folder a session could be joined to. */
   publish(answer: RelayedAnswer | undefined, dirs: readonly string[]): void {
@@ -87,12 +96,11 @@ export class ProviderRelay {
     const record = { apiVersion: 1, pid: process.pid, updatedMs: now };
     try {
       fs.mkdirSync(RELAY_DIR, { recursive: true, mode: 0o700 });
-      // Renamed into place, so a reader never parses a half-written file.
-      const tmp = `${OWN_FILE}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify({ ...record, ...payload }), {
-        mode: 0o600,
-      });
-      fs.renameSync(tmp, OWN_FILE);
+      writeFileAtomic(
+        OWN_FILE,
+        JSON.stringify({ ...record, ...payload }),
+        0o600
+      );
       this.written = { body, at: now };
     } catch {
       // Best effort: a window that cannot write is heard only while it leads.
@@ -127,19 +135,5 @@ export function readRelays(): ByokRecord[] {
  *  directory is this extension's own and every file in it is named by the pid
  *  that wrote it, so it is safe to collect. */
 function pruneDeadRelays(): void {
-  let names: string[];
-  try {
-    names = fs.readdirSync(RELAY_DIR);
-  } catch {
-    return;
-  }
-  for (const name of names) {
-    const pid = Number(/^(\d+)\.json(?:\.tmp)?$/.exec(name)?.[1]);
-    if (!pid || pid === process.pid || isLive(pid)) continue;
-    try {
-      fs.rmSync(path.join(RELAY_DIR, name), { force: true });
-    } catch {
-      /* another window got there first */
-    }
-  }
+  sweepDeadPidFiles(RELAY_DIR, RELAY_NAME);
 }

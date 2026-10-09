@@ -40,6 +40,7 @@ import {
   normalizeEndpoint,
   parseProviders,
 } from "./pricing";
+import { isLive } from "./pidFiles";
 import { isWithinDir } from "./workspace";
 
 const RECORDS_DIR = path.join(os.homedir(), ".claude-code-byok");
@@ -74,19 +75,6 @@ export interface ByokRecord {
   updatedMs: number;
   /** The live process the record is leased to, when it declares one. */
   pid?: number;
-}
-
-/** True when a pid names a live process. `signal 0` delivers nothing and only
- *  tests for existence; EPERM means the process is there but owned by someone
- *  else, which still counts as alive. */
-export function isLive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (err) {
-    return (err as NodeJS.ErrnoException)?.code === "EPERM";
-  }
 }
 
 /** Absolute, separator-normalized form of a directory path, for prefix tests. A

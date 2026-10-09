@@ -71,7 +71,7 @@
           "type": "number",
           "default": 7,
           "scope": "machine",
-          "description": "Discard interactions older than this many days from the shared history file (~/.claude-speedometer/state.json)."
+          "description": "Discard interactions older than this many days from the shared history file (~/.claude-speedometer/state.json). Daily cost totals, and which projects billed a provider other than Anthropic, are kept for 95 days regardless."
         },
         "claudeSpeedometer.providers": {
           "type": "object",

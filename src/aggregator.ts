@@ -508,11 +508,12 @@ export class Aggregator extends EventEmitter {
     return selectRecent(completed, limit);
   }
 
-  /** Serialize current state for publishing to the shared store. */
+  /** Serialize current state for publishing to the shared store. Every write
+   *  applies retention, banking first so that a turn's cost reaches the ledger
+   *  before the turn itself can be pruned. */
   snapshot(): Snapshot {
     this.bankTurnsIntoLedger();
-    this.pruneDailyCost();
-    this.pruneGatewayWorkspaces();
+    this.prune();
     return {
       version: 4,
       updatedMs: Date.now(),

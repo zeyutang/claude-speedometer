@@ -12,6 +12,7 @@ follows [Semantic Versioning](https://semver.org).
 - A change to `claudeSpeedometer.port` or `claudeSpeedometer.retentionDays` now takes effect in every open window without a reload.
   Before, a window opened ahead of a port change kept the old port, and two windows could overwrite each other's history.
 - `claudeSpeedometer.port` and `claudeSpeedometer.retentionDays` now apply machine-wide: they can be set only in user or remote settings, and Settings Sync no longer carries them between machines.
+- `~/.claude-speedometer/state.json` is now readable only by your user account, and files left there by a crashed window are cleaned up.
 
 ## 1.8.4
 
