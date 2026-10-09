@@ -72,12 +72,14 @@ export interface ByokRecord {
    *  only to break a tie between two records matching a session equally well,
    *  where a record that dates itself beats one that does not. */
   updatedMs: number;
+  /** The live process the record is leased to, when it declares one. */
+  pid?: number;
 }
 
 /** True when a pid names a live process. `signal 0` delivers nothing and only
  *  tests for existence; EPERM means the process is there but owned by someone
  *  else, which still counts as alive. */
-function isLive(pid: number): boolean {
+export function isLive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
@@ -147,15 +149,16 @@ function readPrices(endpoint: string | undefined, raw: unknown): PriceTable {
  * Rejected regardless: an unreadable `apiVersion`, and a record naming no
  * project directory, which nothing could ever match.
  */
-function readRecord(raw: unknown): ByokRecord | undefined {
+function readRecord(raw: unknown, maxAgeMs: number): ByokRecord | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const o = raw as Record<string, unknown>;
   if (typeof o.apiVersion !== "number" || o.apiVersion < 1) return undefined;
   // A non-numeric timestamp is a malformed claim rather than an absent one, so
   // it is read as 0 and then, being absent, left unbounded.
   const updatedMs = typeof o.updatedMs === "number" ? o.updatedMs : 0;
-  if (updatedMs > 0 && Date.now() - updatedMs > MAX_AGE_MS) return undefined;
-  if (o.pid !== undefined && !isLive(Number(o.pid))) return undefined;
+  if (updatedMs > 0 && Date.now() - updatedMs > maxAgeMs) return undefined;
+  const pid = o.pid === undefined ? undefined : Number(o.pid);
+  if (pid !== undefined && !isLive(pid)) return undefined;
   const dirs: string[] = [];
   if (Array.isArray(o.projectDirs)) {
     for (const value of o.projectDirs) {
@@ -173,15 +176,24 @@ function readRecord(raw: unknown): ByokRecord | undefined {
     reportedCostIsGuess: o.costBasis === "unknown",
     prices: readPrices(endpoint, o.models),
     updatedMs,
+    pid,
   };
 }
 
 /** Every readable, live record in the directory. A missing directory, which is
  *  the case whenever nothing writes one, is ordinary and yields an empty list. */
 export function readByokRecords(): ByokRecord[] {
+  return readRecordsIn(RECORDS_DIR, MAX_AGE_MS);
+}
+
+/** Every readable, live record in `dir`, one that dates itself lapsing
+ *  `maxAgeMs` after it was written. Shared with the relays each window writes
+ *  for its own provider (see `./providerRelay`), which take the same format on
+ *  a shorter lease. */
+export function readRecordsIn(dir: string, maxAgeMs: number): ByokRecord[] {
   let names: string[];
   try {
-    names = fs.readdirSync(RECORDS_DIR);
+    names = fs.readdirSync(dir);
   } catch {
     return [];
   }
@@ -191,7 +203,8 @@ export function readByokRecords(): ByokRecord[] {
     let record: ByokRecord | undefined;
     try {
       record = readRecord(
-        JSON.parse(fs.readFileSync(path.join(RECORDS_DIR, name), "utf8"))
+        JSON.parse(fs.readFileSync(path.join(dir, name), "utf8")),
+        maxAgeMs
       );
     } catch {
       continue; // half-written or hand-mangled; a writer rewrites it in time
@@ -202,31 +215,49 @@ export function readByokRecords(): ByokRecord[] {
 }
 
 /**
+ * How specifically `dirs` claim a session rooted at `workspace`: the segment
+ * count of the deepest one containing it, or -1 when none does.
+ *
+ * A directory naming a subdirectory is the more specific claim, so it outranks
+ * one naming the repository root above it. Exported so that a window's own
+ * folders can be weighed against a record's on the same scale.
+ */
+export function claimDepth(
+  dirs: readonly string[],
+  workspace: string | undefined
+): number {
+  const dir = normalizeDir(workspace);
+  if (!dir) return -1;
+  let depth = -1;
+  for (const raw of dirs) {
+    const parent = normalizeDir(raw);
+    if (!parent || !isWithinDir(dir, parent)) continue;
+    depth = Math.max(depth, parent.split(path.sep).length);
+  }
+  return depth;
+}
+
+/**
  * The record covering a Claude Code session rooted at `workspace`, if any.
  *
- * Matched on the *longest* directory containing the session, so a record naming
- * a subdirectory wins over one naming the repository root above it, which is the
- * more specific claim. A tie on depth goes to the most recently written record.
+ * Matched on the *longest* directory containing the session (see
+ * {@link claimDepth}). A tie on depth goes to the most recently written record.
  */
 export function findByokRecord(
   records: readonly ByokRecord[],
   workspace: string | undefined
 ): ByokRecord | undefined {
-  const dir = normalizeDir(workspace);
-  if (!dir) return undefined;
   let best: ByokRecord | undefined;
   let bestDepth = -1;
   for (const record of records) {
-    for (const parent of record.dirs) {
-      if (!isWithinDir(dir, parent)) continue;
-      const depth = parent.split(path.sep).length;
-      if (
-        depth > bestDepth ||
-        (depth === bestDepth && best && record.updatedMs > best.updatedMs)
-      ) {
-        best = record;
-        bestDepth = depth;
-      }
+    const depth = claimDepth(record.dirs, workspace);
+    if (depth < 0) continue;
+    if (
+      depth > bestDepth ||
+      (depth === bestDepth && best && record.updatedMs > best.updatedMs)
+    ) {
+      best = record;
+      bestDepth = depth;
     }
   }
   return best;

@@ -274,9 +274,9 @@ type KvRow = [string, string] | [string, string, string];
 
 const UNRESOLVED_ENDPOINT_TITLE =
   "Claude Code's base URL could not be read from any settings file, from a " +
-  "BYOK record, or from this window's environment. Add a " +
-  "claudeSpeedometer.providers entry with no endpoint to price these " +
-  "interactions.";
+  "BYOK record, from a provider extension in any open window, or from this " +
+  "window's environment. Add a claudeSpeedometer.providers entry with no " +
+  "endpoint to price these interactions.";
 
 const LOWER_BOUND_TITLE =
   "Lower bound: this window contains interactions that have never had a " +
@@ -305,9 +305,9 @@ function latestCostRow(v: TurnView): KvRow {
       label,
       value,
       `Priced at the rate that last applied to ${v.model ?? "this model"} ` +
-        `at ${where}. No current rate is readable from this window, as when ` +
-        `the tool that wrote a BYOK record has exited or the rate came from ` +
-        `a provider extension in another window.`,
+        `at ${where}. No current rate is readable, as when the tool that ` +
+        `wrote a BYOK record has exited or the window whose provider ` +
+        `extension supplied the rate has closed.`,
     ];
   }
   if (v.cost.state === "unpriced") {

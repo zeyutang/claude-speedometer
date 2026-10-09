@@ -3,6 +3,12 @@
 All notable changes to Claude Speedometer are documented here. This project
 follows [Semantic Versioning](https://semver.org).
 
+## Unreleased
+
+- A provider extension's `getBillingContext()` answer now prices its window's sessions whichever window runs the receiver.
+  It used to be read only while its own window ran the receiver, so a session on Anthropic's API in a project that had billed another provider before could read `unpriced` with an unresolved endpoint.
+- Where two windows' folders both contain a session, the provider in the window with the more specific folder now answers for it.
+
 ## 1.8.4
 
 - An interaction keeps its cost once the rate that priced it is no longer readable, instead of turning `unpriced`.

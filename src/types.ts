@@ -49,8 +49,8 @@ export interface Turn {
   costBasis?: CostBasis;
   /** The rate that last priced this row, kept so the row still prices once no
    *  source this extension can read publishes one: a BYOK record lapses when
-   *  the tool that wrote it exits, and a provider extension's rates reach only
-   *  its own window. Only ever taken from a rate matching the row's own
+   *  the tool that wrote it exits, and a provider extension's rates when its
+   *  window closes. Only ever taken from a rate matching the row's own
    *  endpoint and model, and dropped if the row is re-attributed, so it never
    *  prices a request at a rate that did not apply to it. Retained, and so
    *  reclaimed, with the row, which is as long as anything can re-price it. */

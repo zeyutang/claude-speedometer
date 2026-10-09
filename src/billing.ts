@@ -16,10 +16,12 @@ import {
 } from "./pricing";
 import {
   ByokRecord,
+  claimDepth,
   findByokRecord,
   readByokRecords,
   recordPrices,
 } from "./byokRecords";
+import { ProviderRelay, RELAY_TICK_MS, readRelays } from "./providerRelay";
 
 // How long a resolved answer is reused. Every input (three settings files, this
 // process's environment, a provider extension's exports) is re-read behind this,
@@ -76,10 +78,12 @@ interface ProviderAnswer {
  * 1. A BYOK record, consulted first because it is the only source scoped to the
  *    *session's own* project directory rather than to whichever window happens
  *    to be reading. See `./byokRecords`.
- * 2. A billing-context provider extension in this window, which answers for
- *    this window alone. It is therefore trusted only for a session that this
- *    window's own folders could plausibly contain, and never for one a record
- *    has already claimed.
+ * 2. A billing-context provider extension, which answers for its own window
+ *    alone. It is therefore trusted only for a session that its window's
+ *    folders could plausibly contain, and never for one a record has already
+ *    claimed. Each window relays its provider's answer to the others (see
+ *    `./providerRelay`), so a session is attributed the same way whichever
+ *    window runs the receiver.
  *
  * Reads are per Claude Code *session project directory*, not per VS Code
  * workspace folder. One window's receiver ingests events from every session on
@@ -101,6 +105,12 @@ export class BillingService implements BillingSource {
   // else: one scan serves every api_request in a burst, and a configuration
   // change in another window takes effect within a couple of seconds.
   private records: { at: number; list: ByokRecord[] } | undefined;
+  // Every other window's relayed provider answer, cached the same way.
+  private relays: { at: number; list: ByokRecord[] } | undefined;
+  // This window's own answer, passed on for whichever window runs the receiver.
+  private readonly relay = new ProviderRelay();
+  private readonly relayTimer: ReturnType<typeof setInterval>;
+  private readonly folderSubscription: vscode.Disposable;
 
   constructor() {
     this.subscription = vscode.workspace.onDidChangeConfiguration((e) => {
@@ -109,12 +119,24 @@ export class BillingService implements BillingSource {
       this.mergedPrices = undefined;
       this.provider = undefined;
       this.records = undefined;
+      this.relays = undefined;
       this.contexts.clear();
+      this.publishRelay();
       this.emitter.fire();
     });
+    this.folderSubscription = vscode.workspace.onDidChangeWorkspaceFolders(
+      () => this.publishRelay()
+    );
+    // A provider announces nothing when its answer changes, and may not even be
+    // active yet at this point, so its answer is polled.
+    this.relayTimer = setInterval(() => this.publishRelay(), RELAY_TICK_MS);
+    this.publishRelay();
   }
 
   dispose(): void {
+    clearInterval(this.relayTimer);
+    this.relay.clear();
+    this.folderSubscription.dispose();
     this.subscription.dispose();
     this.emitter.dispose();
   }
@@ -149,6 +171,9 @@ export class BillingService implements BillingSource {
       this.priceTable,
       recordPrices(this.resolveRecords())
     );
+    // Another window's provider rates rank as this window's own do, over the
+    // records, but beneath this window's, which are read live.
+    table = mergePriceTables(table, recordPrices(this.resolveRelays()));
     const answer = this.resolveProvider();
     if (answer?.pricing && answer.pricing.size > 0) {
       table = answer.endpoint
@@ -170,33 +195,42 @@ export class BillingService implements BillingSource {
     return list;
   }
 
+  /** Every other window's relayed provider answer, cached for
+   *  {@link CACHE_MS}. */
+  private resolveRelays(): ByokRecord[] {
+    const now = Date.now();
+    if (this.relays && now - this.relays.at < CACHE_MS) {
+      return this.relays.list;
+    }
+    const list = readRelays();
+    this.relays = { at: now, list };
+    return list;
+  }
+
+  /** Pass this window's provider answer on to whichever window reads it. */
+  private publishRelay(): void {
+    this.relay.publish(this.resolveProvider(), this.folderPaths());
+  }
+
   private resolveContext(workspace: string | undefined): BillingContext {
     // A record is asked for first and taken as final when one covers this
     // session, being the one source that answers for the session's own project
     // directory rather than for whoever is reading.
     const record = findByokRecord(this.resolveRecords(), workspace);
-    if (record) {
-      return {
-        endpoint: record.endpoint,
-        overrideSeen: true,
-        reportedCostIsGuess: record.reportedCostIsGuess,
-      };
-    }
+    if (record) return claimedContext(record);
 
-    // An in-window provider speaks only for its own window. Applying its answer
-    // to a session rooted elsewhere is what stamps one window's endpoint onto
+    // A provider speaks only for its own window. Applying its answer to a
+    // session rooted elsewhere is what stamps one window's endpoint onto
     // another window's traffic, and at that point the figure is not merely
-    // unknown but confidently wrong. A session whose directory has not resolved
-    // yet is the one case with nothing to compare, and there the provider is
-    // still the best answer available.
+    // unknown but confidently wrong. Every window's provider is heard, this
+    // window's read directly and the others' as relayed, so which window runs
+    // the receiver makes no difference to the answer.
     const answer = this.resolveProvider();
-    if (answer && (workspace === undefined || this.covers(workspace))) {
-      return {
-        endpoint: answer.endpoint,
-        overrideSeen: true,
-        reportedCostIsGuess: answer.reportedCostIsGuess,
-      };
+    const relay = findByokRecord(this.resolveRelays(), workspace);
+    if (answer && this.speaksFor(workspace, relay)) {
+      return claimedContext(answer);
     }
+    if (relay) return claimedContext(relay);
 
     // Later files win, matching Claude Code: the project's shared settings are
     // applied over the user's, and the project's local settings over those.
@@ -228,22 +262,31 @@ export class BillingService implements BillingSource {
     return { endpoint: normalizeEndpoint(raw), overrideSeen };
   }
 
-  /** True when `workspace` falls inside one of this window's own folders, i.e.
-   *  when a session rooted there could be one this window spawned. Compared
-   *  segment-wise so a sibling directory sharing a name prefix does not match. */
-  private covers(workspace: string): boolean {
-    const folders = vscode.workspace.workspaceFolders ?? [];
-    const dir = path.resolve(workspace);
-    for (const folder of folders) {
-      if (folder.uri.scheme !== "file") continue;
-      const root = path.resolve(folder.uri.fsPath);
-      if (dir === root) return true;
-      const rel = path.relative(root, dir);
-      if (rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel)) {
-        return true;
-      }
-    }
-    return false;
+  /**
+   * True when this window's provider, rather than the `relay` matched for
+   * another window, speaks for a session rooted at `workspace`: when this
+   * window's folders contain the session at least as specifically as the
+   * relay's do, so that it could be one this window spawned. The more specific
+   * claim wins as it does between records, and a tie goes to this window, whose
+   * answer is live rather than relayed. A session whose directory has not
+   * resolved yet is the one case with nothing to compare, and there this
+   * window's provider is still the best answer available.
+   */
+  private speaksFor(
+    workspace: string | undefined,
+    relay: ByokRecord | undefined
+  ): boolean {
+    if (workspace === undefined) return true;
+    const own = claimDepth(this.folderPaths(), workspace);
+    const other = relay ? claimDepth(relay.dirs, workspace) : -1;
+    return own >= 0 && own >= other;
+  }
+
+  /** This window's own folders on disk. */
+  private folderPaths(): string[] {
+    return (vscode.workspace.workspaceFolders ?? [])
+      .filter((folder) => folder.uri.scheme === "file")
+      .map((folder) => folder.uri.fsPath);
   }
 
   /**
@@ -284,6 +327,19 @@ export class BillingService implements BillingSource {
     }
     return undefined;
   }
+}
+
+/** The context a record or a provider claims. Either is an override in its own
+ *  right, whether or not it names an endpoint. */
+function claimedContext(claim: {
+  endpoint?: string;
+  reportedCostIsGuess: boolean;
+}): BillingContext {
+  return {
+    endpoint: claim.endpoint,
+    overrideSeen: true,
+    reportedCostIsGuess: claim.reportedCostIsGuess,
+  };
 }
 
 /** Validate one provider's reply. A falsy `armed` means the provider is present

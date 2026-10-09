@@ -75,7 +75,7 @@ This extension therefore ignores that figure for any request it cannot confirm w
 Which provider served a request is decided from the base URL, never from the model name, because a gateway can serve a model called `~anthropic/claude-opus-latest` at its own rates.
 With one exception: a base-URL reading that says Anthropic is disbelieved when the model id on the response is not one Anthropic's API has (a provider path like `accounts/fireworks/models/glm-5p3` could never be served by api.anthropic.com), because the id is direct evidence while a configured URL can be stale or describe another window's account.
 Once a project's traffic has been attributed anywhere other than Anthropic, later requests from it are not trusted to Anthropic's rate on the strength of a `claude-` model id alone, so losing the configuration that named your provider leaves them `unpriced` rather than priced as Claude.
-Setting that project's base URL to Anthropic's own clears this.
+Setting that project's base URL to Anthropic's own clears this, as does a provider extension reporting Anthropic from a window open on the project.
 
 In practice:
 
@@ -135,7 +135,9 @@ That is the common case on a provider whose guide remaps the task tiers, such as
 Two routes cover a setup where the base URL never lands in a file at all: a shell `export` made in a terminal this window did not inherit, or a tool that sets it on the Claude Code process directly.
 
 - **A BYOK record** in `~/.claude-code-byok/`, declaring which project directories a provider serves and at what rates. It is the only source scoped to the _session's own_ project directory, so it is read first, and it is what lets this window cost a session it has no configuration for. See [Declaring a Provider This Extension Cannot See](#declaring-a-provider-this-extension-cannot-see).
-- **A `getBillingContext()` export** from an extension in this window. VS Code exposes another extension's exports only within the same window, so this answers for this window alone and is trusted only for a session rooted inside its own folders (see `claudeSpeedometer.billingContextProvider`).
+- **A `getBillingContext()` export** from an extension in any open window.
+  VS Code exposes another extension's exports only within the same window, so each window passes its own answer on to the one running the receiver.
+  An answer is trusted only for a session rooted inside its window's folders, and where two windows' folders both contain a session, the more specific one wins (see `claudeSpeedometer.billingContextProvider`).
 
 #### Declaring a Provider This Extension Cannot See
 

@@ -347,10 +347,10 @@ export function computeCost(t: CostInputs, r: ModelRate): number {
  * A rate readable now always wins, so a correction still reaches history. Only
  * when none is does the turn fall back to the rate that last priced it, and
  * that is routine rather than an error: a BYOK record lapses once the tool that
- * wrote it exits, and a provider extension's rates are readable only in its own
- * window. The remembered rate is the one in force for the turn's own requests,
- * or a later correction to it, so pricing from it passes no stale rate off as
- * current, and it reaches no turn it did not already price.
+ * wrote it exits, and a provider extension's rates once its window closes. The
+ * remembered rate is the one in force for the turn's own requests, or a later
+ * correction to it, so pricing from it passes no stale rate off as current, and
+ * it reaches no turn it did not already price.
  */
 export function priceTurn(t: CostInputs, prices: PriceTable): PricedCost {
   // Absent on snapshots written before cost attribution existed. Those turns
