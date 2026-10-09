@@ -21,8 +21,8 @@ export class LeaderManager {
 
   constructor(
     private readonly store: SpeedStore,
-    private readonly port: number,
-    private readonly retentionDays = 7,
+    readonly port: number,
+    readonly retentionDays = 7,
     private readonly billing: BillingSource = NO_BILLING_SOURCE,
     private readonly onRoleChange?: (isLeader: boolean) => void
   ) {}
@@ -39,8 +39,15 @@ export class LeaderManager {
     return this.leader;
   }
 
-  async start(): Promise<void> {
-    await this.tryBecomeLeader();
+  /**
+   * Enter the election. With `contend` false the first attempt waits a retry
+   * interval, which is how a window that was following rejoins after a
+   * settings change: the window that was leading re-binds first, and the
+   * history it flushed on the way out reaches every window before any of them
+   * could seed from it.
+   */
+  async start(contend = true): Promise<void> {
+    if (contend) await this.tryBecomeLeader();
     if (!this.leader) this.scheduleRetry();
   }
 
@@ -75,6 +82,13 @@ export class LeaderManager {
       }
       receiver.dispose();
       return; // stay a follower
+    }
+    // Disposed while the bind was pending, as when a settings change replaces
+    // this manager mid-election. Leading now would hold the port for a manager
+    // that nothing will dispose again.
+    if (this.disposed) {
+      receiver.dispose();
+      return;
     }
 
     this.leader = true;

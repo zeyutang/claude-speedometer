@@ -195,7 +195,7 @@ An endpoint, its model ids and their rates are all that pricing a turn requires.
 
 | Setting                                    | Default                    | Meaning                                                                                                                                          |
 | ------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `claudeSpeedometer.port`                   | `4318`                     | Port the receiver listens on (must match the OTLP endpoint).                                                                                     |
+| `claudeSpeedometer.port`                   | `4318`                     | Port the receiver listens on. Must match the OTLP endpoint and be the same in every editor on this machine. |
 | `claudeSpeedometer.exportIntervalMs`       | `2000`                     | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive.                                                                 |
 | `claudeSpeedometer.statusBarPriority`      | `-Number.MAX_SAFE_INTEGER` | Position in the right cluster. Higher = further left; the default pins the bolt at the far right, immediately left of the notification bell.     |
 | `claudeSpeedometer.retentionDays`          | `7`                        | Discard interactions older than this many days.                                                                                                  |

@@ -50,6 +50,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  // A manager's port and retention are fixed for its lifetime, so a change to
+  // either re-runs the election under the new values. Otherwise a window
+  // activated before a port change keeps leading on the old port beside one
+  // activated after it on the new, each overwriting the other's history.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (
+        e.affectsConfiguration("claudeSpeedometer.port") ||
+        e.affectsConfiguration("claudeSpeedometer.retentionDays")
+      ) {
+        restartLeader();
+      }
+    })
+  );
+
   context.subscriptions.push(
     statusBar,
     { dispose: () => billing?.dispose() },
@@ -79,6 +94,22 @@ export function deactivate(): void {
   statusBar?.dispose();
   billing?.dispose();
   store?.dispose();
+}
+
+/**
+ * Replace the leader manager with one built from the current settings. The
+ * outgoing manager flushes first, so turns still accumulating in a leader's
+ * memory reach the shared file that whichever window leads next seeds from.
+ */
+function restartLeader(): void {
+  if (!store || !billing) return;
+  const { port, retentionDays } = readConfig();
+  if (leader?.port === port && leader.retentionDays === retentionDays) return;
+  const wasLeader = leader?.isLeader() ?? false;
+  leader?.republish();
+  leader?.dispose();
+  leader = new LeaderManager(store, port, retentionDays, billing);
+  void leader.start(wasLeader);
 }
 
 function readConfig(): TelemetryEnv & {
@@ -122,7 +153,7 @@ function configure(cfg: TelemetryEnv, notify: boolean): void {
     }
   } catch (err) {
     vscode.window.showErrorMessage(
-      `Claude Speedometer: failed to write ${settingsPath()}: ${
+      `Claude Speedometer: could not update ${settingsPath()}: ${
         (err as Error).message
       }`
     );

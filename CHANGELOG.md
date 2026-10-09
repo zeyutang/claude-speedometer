@@ -8,6 +8,10 @@ follows [Semantic Versioning](https://semver.org).
 - A provider extension's `getBillingContext()` answer now prices its window's sessions whichever window runs the receiver.
   It used to be read only while its own window ran the receiver, so a session on Anthropic's API in a project that had billed another provider before could read `unpriced` with an unresolved endpoint.
 - Where two windows' folders both contain a session, the provider in the window with the more specific folder now answers for it.
+- Configuring telemetry now leaves `~/.claude/settings.json` as it is when the file is not valid JSON, reporting why, instead of replacing it with only the telemetry settings.
+- A change to `claudeSpeedometer.port` or `claudeSpeedometer.retentionDays` now takes effect in every open window without a reload.
+  Before, a window opened ahead of a port change kept the old port, and two windows could overwrite each other's history.
+- `claudeSpeedometer.port` and `claudeSpeedometer.retentionDays` now apply machine-wide: they can be set only in user or remote settings, and Settings Sync no longer carries them between machines.
 
 ## 1.8.4
 

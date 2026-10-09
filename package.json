@@ -54,7 +54,8 @@
         "claudeSpeedometer.port": {
           "type": "number",
           "default": 4318,
-          "description": "Localhost port the embedded OTLP/HTTP receiver listens on. Must match the OTEL_EXPORTER_OTLP_ENDPOINT configured for Claude Code."
+          "scope": "machine",
+          "description": "Localhost port the embedded OTLP/HTTP receiver listens on. Must match the OTEL_EXPORTER_OTLP_ENDPOINT configured for Claude Code, and be the same in every editor on this machine that runs this extension."
         },
         "claudeSpeedometer.exportIntervalMs": {
           "type": "number",
@@ -69,6 +70,7 @@
         "claudeSpeedometer.retentionDays": {
           "type": "number",
           "default": 7,
+          "scope": "machine",
           "description": "Discard interactions older than this many days from the shared history file (~/.claude-speedometer/state.json)."
         },
         "claudeSpeedometer.providers": {
