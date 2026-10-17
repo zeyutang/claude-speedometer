@@ -1,7 +1,9 @@
 # Changelog
 
-All notable changes to Claude Speedometer are documented here. This project
-follows [Semantic Versioning](https://semver.org).
+## Unreleased
+
+- A session resumed after its project folder was renamed or moved now shows the new location under Recent and Workspace, where it showed `-` or the old path.
+  A base URL set in that project's `.claude/settings.json` or `.claude/settings.local.json` now applies to its interactions too.
 
 ## 1.8.5
 

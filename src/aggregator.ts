@@ -128,10 +128,12 @@ export class Aggregator extends EventEmitter {
 
     // Resolved before the row exists, because a project-scoped Claude Code
     // settings file is one of the inputs to the row's cost basis and the project
-    // directory is how that file is found. Hits are cached, so after a session's
-    // first event this is a map lookup.
+    // directory is how that file is found. Hits are cached for the rest of the
+    // prompt, so after a prompt's first event this is a map lookup.
     const sessionId = str(attrs, "session.id");
-    const workspace = sessionId ? resolveWorkspace(sessionId) : undefined;
+    const workspace = sessionId
+      ? resolveWorkspace(sessionId, promptId)
+      : undefined;
 
     const turn = this.ensureTurn(promptId, attrs, ts, workspace);
 
