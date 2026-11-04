@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.8.6
 
 - A session resumed after its project folder was renamed or moved now shows the new location under Recent and Workspace, where it showed `-` or the old path.
   A base URL set in that project's `.claude/settings.json` or `.claude/settings.local.json` now applies to its interactions too.
+- Input under Recent now counts the whole prompt of every request, cache reads and writes included, where it showed only the uncached remainder, often a few tokens per request.
+  It is rounded to three significant figures, and hovering shows the exact count split into cache reads, cache writes, and uncached tokens.
+- The Input row of the overlay and the tab now reads Uncached Input, which is what it has always counted.
 
 ## 1.8.5
 

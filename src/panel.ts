@@ -6,6 +6,7 @@ import {
   fmtEffort,
   fmtEndpoint,
   fmtInt,
+  fmtIntCompact,
   fmtModel,
   fmtPricedCost,
   fmtTime,
@@ -140,6 +141,11 @@ export class StatsPanel {
         const workspaceTitle = workspace
           ? ` title="${escapeHtml(workspace)}"`
           : "";
+        // Input column reads e.g. "4.25M": every request's whole prompt,
+        // summed and rounded (see fmtIntCompact). The title has the exact
+        // count and its split between the cache and the uncached remainder.
+        const inputCell = fmtIntCompact(rv.totalInputTokens);
+        const inputTitle = inputBreakdown(rv);
         return `<tr>
           <td title="${fmtTimestamp(rv.lastMs)}">${fmtTimestampShort(
           rv.lastMs
@@ -147,7 +153,7 @@ export class StatsPanel {
           <td${workspaceTitle}>${escapeHtml(workspaceCell)}</td>
           <td>${escapeHtml(session)}</td>
           <td title="${escapeHtml(modelTitle)}">${escapeHtml(modelCell)}</td>
-          <td class="num">${fmtInt(rv.inputTokens)}</td>
+          <td class="num" title="${escapeHtml(inputTitle)}">${inputCell}</td>
           <td class="num">${fmtInt(rv.outputTokens)}</td>
           <td class="num">${fmtTokPerSec(rv.totalTokPerSec)} <span class="unit">tok/s</span></td>
         </tr>`;
@@ -170,7 +176,7 @@ export class StatsPanel {
       <hr />
       <h3>Tokens</h3>
       ${kv([
-        ["Input Tokens", fmtInt(v.inputTokens)],
+        ["Uncached Input Tokens", fmtInt(v.inputTokens)],
         ["Output Tokens (Thinking + Text)", fmtInt(v.outputTokens)],
         ["Cache Write Tokens", fmtInt(v.cacheCreationTokens)],
         ["Cache Read Tokens", fmtInt(v.cacheReadTokens)],
@@ -235,12 +241,15 @@ export class StatsPanel {
                full row's gaps are even. Worst cases, measured at this table's
                12px type: the year-less "MM-DD HH:MM:SS" stamp, a 22-character
                folder name, an 8-char session, a "haiku-4-5 | medium"-shaped
-               model cell, a seven-digit token count ("9,999,999", well past what
-               one interaction reaches), and a speed below 1000 ("999.99 tok/s").
-               The two variable-length cells run over on their rare long values,
-               ellipsizing in CSS with the full text on hover: a dated model id
-               ("haiku-4-5-20251001 | medium") and an unusually long folder
-               name. -->
+               model cell, a seven-digit output count ("9,999,999", well past
+               what one interaction reaches), and a speed below 1000
+               ("999.99 tok/s"). The input count, a sum of every request's whole
+               prompt, reaches eight digits, so it is rounded to three
+               significant figures ("28.4M") and shares the output column's
+               width. The two variable-length cells run over on their rare long
+               values, ellipsizing in CSS with the full text on hover: a dated
+               model id ("haiku-4-5-20251001 | medium") and an unusually long
+               folder name. -->
           <col style="width:15.5%" />
           <col style="width:23.5%" />
           <col style="width:11%" />
@@ -262,9 +271,11 @@ export class StatsPanel {
       </table>
       <p class="muted note">Each row is one prompt's API calls to one model, so
       a helper call on another model, such as the Haiku call that names a
-      session, gets its own row. Stats span all Claude Code sessions, not just
-      this window. Cost totals accrue from when telemetry was enabled, and weeks
-      start on Monday. Interactions Claude Code cannot price are costed from
+      session, gets its own row. Input adds up the prompt each of those
+      calls sent, cache reads and writes included, with the breakdown on
+      hover. Stats span all Claude Code sessions, not just this window. Cost
+      totals accrue from when telemetry was enabled, and weeks start on
+      Monday. Interactions Claude Code cannot price are costed from
       configured rates. One with no rate reads "unpriced", and any total that
       includes it is marked \u2265.</p>`;
   }
@@ -334,6 +345,19 @@ function windowRow(label: string, w: CostWindow): KvRow {
 function endpointRow(v: TurnView): KvRow {
   const title = v.endpoint ?? UNRESOLVED_ENDPOINT_TITLE;
   return ["Endpoint", fmtEndpoint(v.endpoint), title];
+}
+
+/** Hover text for a Recent row's Input cell: the exact count behind the
+ *  rounded figure, then how it splits between the cache and the uncached
+ *  remainder, one part per line. */
+function inputBreakdown(v: TurnView): string {
+  const requests = v.requests === 1 ? "1 request" : `${v.requests} requests`;
+  return [
+    `${fmtInt(v.totalInputTokens)} input tokens across ${requests}:`,
+    `${fmtInt(v.cacheReadTokens)} cache read`,
+    `${fmtInt(v.cacheCreationTokens)} cache write`,
+    `${fmtInt(v.inputTokens)} uncached`,
+  ].join("\n");
 }
 
 function kv(rows: KvRow[]): string {

@@ -36,7 +36,9 @@ Once installed, the extension needs Claude Code to export telemetry to it:
 The bolt shows the **last completed** interaction's tok/s. It updates when a turn finishes, not while it is still running, so the figure is stable. The overlay and the tab break the latest turn into sections:
 
 - **Speed**: output tok/s (output tokens / total request time).
-- **Tokens**: input, output, cache-write, cache-read. "Output" counts thinking and visible text together; Claude Code's telemetry does not report them separately.
+- **Tokens**: uncached input, output, cache-write, cache-read.
+  Uncached input is the part of each prompt neither read from nor written to the cache, often a few tokens per request.
+  "Output" counts thinking and visible text together; Claude Code's telemetry does not report them separately.
 - **Timing**: total request time and API request count.
 - **Cost (estimated)**: spend for the current interaction, today, this week (from Monday), this month, and last month.
   The windows are bucketed by **UTC** calendar day, and the totals accrue from when telemetry was enabled and survive turn pruning.
@@ -46,7 +48,8 @@ The bolt shows the **last completed** interaction's tok/s. It updates when a tur
   A long id is shortened to the name itself, dropping a provider namespace along with the shared `claude-` prefix, so `accounts/fireworks/models/glm-5p3` reads as `glm-5p3`.
   The tab keeps the full id on hover.
 - **Recent** (tab only): the last several interactions, one row each, with local time, workspace folder, session id, model and effort, input tokens, output tokens, and speed (tok/s).
-  Cells are abbreviated to keep the columns tight: the time drops the year, the workspace shows only its innermost folder, and the model id drops a provider namespace along with the shared `claude-` prefix (a long one is also cut short).
+  The input count adds up the whole prompt of every request in the interaction, cache reads and writes included.
+  Cells are abbreviated to keep the columns tight: the time drops the year, the workspace shows only its innermost folder, the model id drops a provider namespace along with the shared `claude-` prefix (a long one is also cut short), and the input count is rounded to three significant figures (`4.25M`).
   Hover any of them for the full value.
 - **Workspace** (tab only): the session id and the full directory path. The session id is the name of the session's `~/.claude/projects/.../<id>.jsonl` transcript and the `claude --resume <id>` handle.
 

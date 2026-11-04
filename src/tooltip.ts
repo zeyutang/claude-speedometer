@@ -85,7 +85,7 @@ export function buildTooltip(
     {
       title: "Tokens",
       rows: [
-        ["Input", fmtInt(v.inputTokens)],
+        ["Uncached Input", fmtInt(v.inputTokens)],
         ["Output", fmtInt(v.outputTokens)],
         ["Cache Write", fmtInt(v.cacheCreationTokens)],
         ["Cache Read", fmtInt(v.cacheReadTokens)],

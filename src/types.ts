@@ -24,7 +24,10 @@ export interface Turn {
 
   requests: number;
 
-  // tokens (summed across the turn's API calls)
+  // tokens (summed across the turn's API calls). inputTokens is Claude Code's
+  // `input_tokens`, which counts only what follows a request's last cache
+  // breakpoint, a few tokens once the conversation is cached. A request's
+  // whole prompt is that plus the two cache fields.
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -268,6 +271,11 @@ export interface TurnView {
   inputTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+  /** Every prompt token the turn's requests sent, cache reads and writes
+   *  included, of which {@link inputTokens} is the uncached part. Summed over
+   *  requests like {@link outputTokens}, so context that each request reads
+   *  again counts once per request. */
+  totalInputTokens: number;
   totalTokens: number;
 
   totalMs: number;
@@ -306,6 +314,8 @@ export function viewOf(
     inputTokens: t.inputTokens,
     cacheReadTokens: t.cacheReadTokens,
     cacheCreationTokens: t.cacheCreationTokens,
+    totalInputTokens:
+      t.inputTokens + t.cacheReadTokens + t.cacheCreationTokens,
     totalTokens:
       t.inputTokens +
       t.outputTokens +

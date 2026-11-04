@@ -5,6 +5,28 @@ export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString("en-US");
 }
 
+// Largest first, so a count takes the biggest unit it reaches.
+const COMPACT_UNITS: [number, string][] = [
+  [1e9, "B"],
+  [1e6, "M"],
+  [1e3, "K"],
+];
+
+/** A count rounded to three significant figures under a K, M or B suffix
+ *  ("4.25M", "28.4M", "178K"), for a column whose values run to eight digits
+ *  and more. A count below a thousand prints in full. Rounding comes before
+ *  the unit is picked, so 999,999 reads "1.00M" rather than "1000K". */
+export function fmtIntCompact(n: number): string {
+  const r = Number(Math.round(n).toPrecision(3));
+  for (const [unit, suffix] of COMPACT_UNITS) {
+    if (r < unit) continue;
+    const v = r / unit;
+    // Past 999B the suffixes run out and toPrecision would turn exponential.
+    return (v < 1000 ? v.toPrecision(3) : fmtInt(v)) + suffix;
+  }
+  return fmtInt(n);
+}
+
 export function fmtTokPerSec(n: number): string {
   return n.toFixed(2);
 }
