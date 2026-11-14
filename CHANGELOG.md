@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- The bolt now sits at the right end of the status bar's left side.
+  Set `claudeSpeedometer.statusBarAlignment` to `right` to keep it beside the notification bell.
+- A change to `claudeSpeedometer.statusBarPriority` now moves the bolt without a reload.
+- The stats tab now shows the extension's icon.
+- The stats tab, the status bar's context menu, and the overlay's waiting message now read Claude Code Speedometer.
+
 ## 1.8.6
 
 - A session resumed after its project folder was renamed or moved now shows the new location under Recent and Workspace, where it showed `-` or the old path.

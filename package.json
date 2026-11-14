@@ -62,10 +62,19 @@
           "default": 2000,
           "description": "OTEL_LOGS_EXPORT_INTERVAL written when auto-configuring Claude Code. Lower = more responsive status bar, more frequent exports."
         },
+        "claudeSpeedometer.statusBarAlignment": {
+          "type": "string",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "default": "left",
+          "description": "Side of the status bar the bolt sits on."
+        },
         "claudeSpeedometer.statusBarPriority": {
           "type": "number",
           "default": -1000001,
-          "description": "Status bar priority within the right-hand cluster. Higher = further left, lower = further right."
+          "markdownDescription": "Status bar priority within the side set by `#claudeSpeedometer.statusBarAlignment#`. Higher = further left, lower = further right. The default puts the bolt at that side's right end."
         },
         "claudeSpeedometer.retentionDays": {
           "type": "number",

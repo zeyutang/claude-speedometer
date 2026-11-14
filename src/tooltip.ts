@@ -27,8 +27,8 @@ const MAX_VALUE_WIDTH = 14; // wider values (e.g. a dated model id) overflow the
 
 /**
  * The overlay shown when hovering the bolt: a rich Markdown box that pops up just
- * above the status bar (lower-right). Sections render as monospace code blocks
- * sharing one column layout, so values align across every section.
+ * above it. Sections render as monospace code blocks sharing one column layout,
+ * so values align across every section.
  */
 export function buildTooltip(
   store: SpeedStore,
@@ -48,7 +48,7 @@ export function buildTooltip(
   const latest = store.getLatest();
   if (!latest) {
     md.appendMarkdown(
-      "**Claude Speedometer**\n\nWaiting for the next Claude Code interaction…"
+      "**Claude Code Speedometer**\n\nWaiting for the next Claude Code interaction…"
     );
     return md;
   }

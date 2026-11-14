@@ -27,8 +27,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   billing = new BillingService();
 
-  statusBar = new SpeedStatusBar(store, billing, cfg.statusBarPriority);
-  panel = new StatsPanel(store, billing, (visible) =>
+  statusBar = new SpeedStatusBar(
+    store,
+    billing,
+    cfg.statusBarAlignment,
+    cfg.statusBarPriority
+  );
+  panel = new StatsPanel(store, billing, context.extensionUri, (visible) =>
     statusBar?.setActive(visible)
   );
 
@@ -61,6 +66,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         e.affectsConfiguration("claudeSpeedometer.retentionDays")
       ) {
         restartLeader();
+      }
+    })
+  );
+
+  // The bolt's side and position apply as soon as either changes, rather than
+  // at the next reload.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (
+        e.affectsConfiguration("claudeSpeedometer.statusBarAlignment") ||
+        e.affectsConfiguration("claudeSpeedometer.statusBarPriority")
+      ) {
+        const { statusBarAlignment, statusBarPriority } = readConfig();
+        statusBar?.place(statusBarAlignment, statusBarPriority);
       }
     })
   );
@@ -113,6 +132,7 @@ function restartLeader(): void {
 }
 
 function readConfig(): TelemetryEnv & {
+  statusBarAlignment: vscode.StatusBarAlignment;
   statusBarPriority: number;
   retentionDays: number;
 } {
@@ -120,7 +140,11 @@ function readConfig(): TelemetryEnv & {
   return {
     port: c.get<number>("port", 4318),
     exportIntervalMs: c.get<number>("exportIntervalMs", 2000),
-    statusBarPriority: c.get<number>("statusBarPriority", -Number.MAX_SAFE_INTEGER),
+    statusBarAlignment:
+      c.get<string>("statusBarAlignment", "left") === "right"
+        ? vscode.StatusBarAlignment.Right
+        : vscode.StatusBarAlignment.Left,
+    statusBarPriority: c.get<number>("statusBarPriority", -1_000_001),
     retentionDays: c.get<number>("retentionDays", 7),
   };
 }

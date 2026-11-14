@@ -23,18 +23,23 @@ export class SpeedStatusBar {
   constructor(
     private readonly store: SpeedStore,
     private readonly billing: BillingService,
+    alignment: vscode.StatusBarAlignment,
     priority: number
   ) {
-    this.item = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Right,
-      priority
-    );
-    this.item.command = "claudeSpeedometer.togglePanel";
-    this.item.name = "Claude Speedometer";
-    this.render();
-    this.item.show();
+    this.item = this.createItem(alignment, priority);
     this.store.on("update", () => this.render());
     this.timer = setInterval(() => this.render(), REFRESH_MS);
+  }
+
+  /** Move the bolt to another side or position. VS Code fixes an item's
+   *  alignment and priority when it is created, so moving the bolt means
+   *  replacing its item. */
+  place(alignment: vscode.StatusBarAlignment, priority: number): void {
+    if (alignment === this.item.alignment && priority === this.item.priority) {
+      return;
+    }
+    this.item.dispose();
+    this.item = this.createItem(alignment, priority);
   }
 
   /** Reflect the stats tab being open (solid) vs closed (hollow). */
@@ -49,22 +54,35 @@ export class SpeedStatusBar {
     this.render();
   }
 
-  private render(): void {
+  private createItem(
+    alignment: vscode.StatusBarAlignment,
+    priority: number
+  ): vscode.StatusBarItem {
+    const item = vscode.window.createStatusBarItem(alignment, priority);
+    item.command = "claudeSpeedometer.togglePanel";
+    // The label the status bar's context menu lists the bolt under.
+    item.name = "Claude Code Speedometer";
+    this.render(item);
+    item.show();
+    return item;
+  }
+
+  private render(item = this.item): void {
     const turn = this.store.getLatest();
     const speedStr = fmtTokPerSecFixed(
       turn ? viewOf(turn, Date.now()).totalTokPerSec : undefined
     );
 
-    this.item.text = `$(zap) ${speedStr} tok/s`;
+    item.text = `$(zap) ${speedStr} tok/s`;
     // While the stats tab is open, fill the item with the warning background to
     // mark the active state. VS Code only allows warning/error *backgrounds* for
     // status-bar items, and it auto-pairs a contrasting foreground, so this stays
     // legible in both light and dark themes. (A plain foreground tint such as
     // prominentForeground renders near-white and vanishes on light backgrounds.)
-    this.item.backgroundColor = this.active
+    item.backgroundColor = this.active
       ? new vscode.ThemeColor("statusBarItem.warningBackground")
       : undefined;
-    this.item.tooltip = buildTooltip(this.store, this.billing);
+    item.tooltip = buildTooltip(this.store, this.billing);
   }
 
   dispose(): void {

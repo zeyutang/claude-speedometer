@@ -1,8 +1,14 @@
-# Claude Speedometer
+# Claude Code Speedometer
+
+[![VS Marketplace](https://badgen.net/vs-marketplace/v/zeyutang.claude-speedometer?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=zeyutang.claude-speedometer)
+[![VS Marketplace downloads](https://badgen.net/vs-marketplace/d/zeyutang.claude-speedometer)](https://marketplace.visualstudio.com/items?itemName=zeyutang.claude-speedometer)
+[![Open VSX](https://img.shields.io/open-vsx/v/zeyutang/claude-speedometer?label=Open%20VSX)](https://open-vsx.org/extension/zeyutang/claude-speedometer)
+[![Open VSX downloads](https://img.shields.io/open-vsx/dt/zeyutang/claude-speedometer)](https://open-vsx.org/extension/zeyutang/claude-speedometer)
 
 A VS Code status-bar indicator showing the **token throughput and timing of your latest Claude Code interaction**.
 
-The bolt sits at the far right of the status bar, immediately left of the notification bell: `↯ 70.2 tok/s`, and updates after every interaction. **Hover** it for a quick stats overlay; **click** it to open a full stats tab (click again to close).
+The bolt, `↯ 70.2 tok/s`, sits at the right end of the status bar's left side and updates after every interaction.
+**Hover** it for a quick stats overlay; **click** it to open a full stats tab (click again to close).
 
 ## What it looks like
 
@@ -200,7 +206,8 @@ An endpoint, its model ids and their rates are all that pricing a turn requires.
 | ------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `claudeSpeedometer.port`                   | `4318`                     | Port the receiver listens on. Must match the OTLP endpoint and be the same in every editor on this machine.                                      |
 | `claudeSpeedometer.exportIntervalMs`       | `2000`                     | `OTEL_LOGS_EXPORT_INTERVAL` written during auto-config. Lower = more responsive.                                                                 |
-| `claudeSpeedometer.statusBarPriority`      | `-Number.MAX_SAFE_INTEGER` | Position in the right cluster. Higher = further left; the default pins the bolt at the far right, immediately left of the notification bell.     |
+| `claudeSpeedometer.statusBarAlignment` | `left` | Side of the status bar the bolt sits on, `left` or `right`. |
+| `claudeSpeedometer.statusBarPriority` | `-1000001` | Position within that side, where higher is further left. The default puts the bolt at the side's right end. |
 | `claudeSpeedometer.retentionDays`          | `7`                        | Discard interactions older than this many days. Daily cost totals, and which projects billed another provider, are kept for 95 days.             |
 | `claudeSpeedometer.providers`              | `{}`                       | Rates for providers Claude Code cannot price, nested provider then model. See [Pricing a Third-Party Provider](#pricing-a-third-party-provider). |
 | `claudeSpeedometer.billingContextProvider` | `auto`                     | Which extension to ask where Claude Code is sending requests. `off` asks none, and any other value pins one extension id.                        |

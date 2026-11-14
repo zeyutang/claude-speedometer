@@ -41,6 +41,7 @@ export class StatsPanel {
   constructor(
     private readonly store: SpeedStore,
     private readonly billing: BillingService,
+    private readonly extensionUri: vscode.Uri,
     private readonly onVisibilityChange: (visible: boolean) => void
   ) {
     this.store.on("update", () => {
@@ -56,10 +57,12 @@ export class StatsPanel {
     }
     this.panel = vscode.window.createWebviewPanel(
       "claudeSpeedometer.stats",
-      "Claude Speedometer",
+      "Claude Code Speedometer",
       { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
       { enableScripts: false, retainContextWhenHidden: true }
     );
+    // The tab shows the extension's logo, the same icon.png its listing uses.
+    this.panel.iconPath = vscode.Uri.joinPath(this.extensionUri, "icon.png");
     this.panel.webview.html = this.render();
     this.onVisibilityChange(true);
     this.timer = setInterval(() => {
