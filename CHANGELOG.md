@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.8.7
 
 - The bolt now sits at the right end of the status bar's left side.
   Set `claudeSpeedometer.statusBarAlignment` to `right` to keep it beside the notification bell.
