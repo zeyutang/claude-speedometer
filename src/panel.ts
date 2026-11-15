@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import * as vscode from "vscode";
 import { BillingService } from "./billing";
 import { SpeedStore } from "./store";
@@ -22,9 +23,8 @@ import { CostWindow, CostWindows, Turn, TurnView, viewOf } from "./types";
  * The stats tab opened by clicking the bolt. Opens in the active editor group,
  * reuses the existing tab if already open, and toggles closed on a second click.
  */
-// While the panel is open, re-render on this cadence so the header's relative
-// "(x ago)" hint advances; scripts are disabled in the webview, so the extension
-// drives the refresh rather than client-side JS.
+// While the panel is open, redraw on this cadence so the header's relative
+// "(x ago)" hint advances. A redraw that changes nothing sends nothing.
 const REFRESH_MS = 10_000;
 
 // Longest workspace path the Workspace section prints before ellipsizing from
@@ -37,6 +37,9 @@ const DIR_MAX_LEN = 80;
 export class StatsPanel {
   private panel: vscode.WebviewPanel | undefined;
   private timer: ReturnType<typeof setInterval> | undefined;
+  // The body the page last received, so a redraw that changes nothing sends
+  // nothing.
+  private shown: string | undefined;
 
   constructor(
     private readonly store: SpeedStore,
@@ -44,9 +47,7 @@ export class StatsPanel {
     private readonly extensionUri: vscode.Uri,
     private readonly onVisibilityChange: (visible: boolean) => void
   ) {
-    this.store.on("update", () => {
-      if (this.panel) this.panel.webview.html = this.render();
-    });
+    this.store.on("update", () => this.redraw());
   }
 
   /** Click handler: open (in the current group) if closed, else close. */
@@ -59,18 +60,24 @@ export class StatsPanel {
       "claudeSpeedometer.stats",
       "Claude Code Speedometer",
       { viewColumn: vscode.ViewColumn.Active, preserveFocus: false },
-      { enableScripts: false, retainContextWhenHidden: true }
+      { enableScripts: true, retainContextWhenHidden: true }
     );
     // The tab shows the extension's logo, the same icon.png its listing uses.
     this.panel.iconPath = vscode.Uri.joinPath(this.extensionUri, "icon.png");
-    this.panel.webview.html = this.render();
+    // The page asks for the current body each time it loads. A reload by VS
+    // Code rewrites the page from the html assigned below, which would
+    // otherwise show that first render until the next change.
+    this.panel.webview.onDidReceiveMessage((msg: { type?: string }) => {
+      if (msg?.type === "ready") this.redraw(true);
+    });
+    this.shown = this.renderBody();
+    this.panel.webview.html = wrapHtml(this.shown, newNonce());
     this.onVisibilityChange(true);
-    this.timer = setInterval(() => {
-      if (this.panel) this.panel.webview.html = this.render();
-    }, REFRESH_MS);
+    this.timer = setInterval(() => this.redraw(), REFRESH_MS);
     this.panel.onDidDispose(() => {
       this.stopTimer();
       this.panel = undefined;
+      this.shown = undefined;
       this.onVisibilityChange(false);
     });
   }
@@ -84,7 +91,7 @@ export class StatsPanel {
   /** Redraw outside the usual triggers, for a change (an edited price table)
    *  that alters what is rendered without altering the shared state. */
   refresh(): void {
-    if (this.panel) this.panel.webview.html = this.render();
+    this.redraw();
   }
 
   private stopTimer(): void {
@@ -94,16 +101,29 @@ export class StatsPanel {
     }
   }
 
-  private render(): string {
+  /**
+   * Send the current body to the page, which patches it into what is showing.
+   * Assigning `webview.html` instead would have VS Code build a fresh iframe
+   * and discard the old one, taking down a tooltip that is showing or waiting
+   * out its delay, and the new page shows none until the pointer moves again.
+   */
+  private redraw(force = false): void {
+    if (!this.panel) return;
+    const body = this.renderBody();
+    if (!force && body === this.shown) return;
+    this.shown = body;
+    void this.panel.webview.postMessage({ type: "body", html: body });
+  }
+
+  private renderBody(): string {
     const now = Date.now();
     const latest = this.store.getLatest();
     const recent = this.store.getRecent(20);
     const cost = this.store.getCostWindows(now);
     const prices = this.billing.prices();
-    const body = latest
+    return latest
       ? this.renderTurn(viewOf(latest, now, prices), recent, now, cost)
       : this.renderEmpty();
-    return wrapHtml(body);
   }
 
   private renderEmpty(): string {
@@ -397,12 +417,61 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;");
 }
 
-function wrapHtml(body: string): string {
+/** A fresh nonce for the page's one script, which the CSP admits by it. */
+function newNonce(): string {
+  return randomBytes(16).toString("hex");
+}
+
+// The page's one script. It patches each body the extension sends into the
+// live page: a node is kept wherever the new markup has one of the same kind at
+// the same position, and only text and attributes that differ are rewritten, so
+// the cell under the pointer stays the same element and its tooltip survives
+// the redraw. The body element's own attributes are left alone, since VS Code
+// stamps its theme and role there.
+const PAGE_SCRIPT = `(() => {
+  const vscode = acquireVsCodeApi();
+  function patch(live, next) {
+    if (live.nodeType !== Node.ELEMENT_NODE) {
+      if (live.nodeValue !== next.nodeValue) live.nodeValue = next.nodeValue;
+      return;
+    }
+    for (const { name } of Array.from(live.attributes)) {
+      if (!next.hasAttribute(name)) live.removeAttribute(name);
+    }
+    for (const { name, value } of Array.from(next.attributes)) {
+      if (live.getAttribute(name) !== value) live.setAttribute(name, value);
+    }
+    patchChildren(live, next);
+  }
+  function patchChildren(live, next) {
+    const have = Array.from(live.childNodes);
+    const want = Array.from(next.childNodes);
+    want.forEach((node, i) => {
+      const old = have[i];
+      if (!old) live.appendChild(node);
+      else if (old.nodeType !== node.nodeType || old.nodeName !== node.nodeName)
+        live.replaceChild(node, old);
+      else patch(old, node);
+    });
+    for (const old of have.slice(want.length)) old.remove();
+  }
+  window.addEventListener("message", (e) => {
+    if (e.data?.type !== "body") return;
+    // Opened explicitly, the body keeps the leading whitespace that the live
+    // page has, which a bare fragment would lose, shifting every position.
+    const html = "<body>" + e.data.html;
+    const next = new DOMParser().parseFromString(html, "text/html");
+    patchChildren(document.body, next.body);
+  });
+  vscode.postMessage({ type: "ready" });
+})();`;
+
+function wrapHtml(body: string, nonce: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';" />
 <style>
   body {
     font-family: var(--vscode-font-family);
@@ -448,7 +517,7 @@ function wrapHtml(body: string): string {
   .empty { text-align: center; padding: 28px 8px; }
   code { background: var(--vscode-textCodeBlock-background); padding: 1px 4px; border-radius: 3px; }
 </style>
+<script nonce="${nonce}">${PAGE_SCRIPT}</script>
 </head>
-<body>${body}</body>
-</html>`;
+<body>${body}</body></html>`;
 }

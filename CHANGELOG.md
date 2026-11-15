@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Tooltips in the stats tab now show on every hover and stay up.
+  The tab's refresh, every few seconds while Claude Code is working, used to dismiss them or keep them from appearing until the pointer moved.
+
 ## 1.8.7
 
 - The bolt now sits at the right end of the status bar's left side.
