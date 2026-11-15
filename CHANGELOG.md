@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Tooltips in the stats tab now show on every hover and stay up.
-  The tab's refresh, every few seconds while Claude Code is working, used to dismiss them or keep them from appearing until the pointer moved.
+- Tooltips in the stats tab now look and behave like VS Code's own hovers: each appears after `workbench.hover.delay` once the pointer reaches a value, and moving straight on to the next value shows its tooltip at once.
+  The tab's refresh, every few seconds while Claude Code is working, no longer dismisses them or keeps them from appearing.
 
 ## 1.8.7
 

@@ -70,11 +70,17 @@ export class StatsPanel {
     this.panel.webview.onDidReceiveMessage((msg: { type?: string }) => {
       if (msg?.type === "ready") this.redraw(true);
     });
+    // Every body carries the hover delay, so a changed one reaches the page
+    // with a redraw.
+    const config = vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("workbench.hover.delay")) this.redraw(true);
+    });
     this.shown = this.renderBody();
-    this.panel.webview.html = wrapHtml(this.shown, newNonce());
+    this.panel.webview.html = wrapHtml(this.shown, newNonce(), hoverDelay());
     this.onVisibilityChange(true);
     this.timer = setInterval(() => this.redraw(), REFRESH_MS);
     this.panel.onDidDispose(() => {
+      config.dispose();
       this.stopTimer();
       this.panel = undefined;
       this.shown = undefined;
@@ -112,7 +118,11 @@ export class StatsPanel {
     const body = this.renderBody();
     if (!force && body === this.shown) return;
     this.shown = body;
-    void this.panel.webview.postMessage({ type: "body", html: body });
+    void this.panel.webview.postMessage({
+      type: "body",
+      html: body,
+      hoverDelay: hoverDelay(),
+    });
   }
 
   private renderBody(): string {
@@ -149,34 +159,30 @@ export class StatsPanel {
         const session = rv.sessionId ? rv.sessionId.slice(0, 8) : "-";
         const model = rv.model ?? "-";
         // Model column reads e.g. "opus-4-8 | max": the shortened id (see
-        // fmtModel) plus the lowercased effort level. The title keeps the full
-        // id for hover.
+        // fmtModel) plus the lowercased effort level. The tooltip keeps the
+        // full id.
         const modelShort = fmtModel(rv.model);
         const effort = rv.effort ? rv.effort.toLowerCase() : "";
         const modelCell = effort ? `${modelShort} | ${effort}` : modelShort;
-        const modelTitle = effort ? `${model} | ${effort}` : model;
+        const modelTip = effort ? `${model} | ${effort}` : model;
         // Workspace column shows just the innermost folder ("claude-speedometer"),
-        // the part that identifies the project; the full path is the hover title.
+        // the part that identifies the project; the full path is the tooltip.
         // It falls back to "-" for turns whose transcript could not be read, and
         // for history recorded before paths were resolved.
         const workspace = rv.workspace;
         const workspaceCell = workspace ? leafDir(workspace) : "-";
-        const workspaceTitle = workspace
-          ? ` title="${escapeHtml(workspace)}"`
-          : "";
+        const workspaceTip = workspace ? tip(workspace) : "";
         // Input column reads e.g. "4.25M": every request's whole prompt,
-        // summed and rounded (see fmtIntCompact). The title has the exact
+        // summed and rounded (see fmtIntCompact). The tooltip has the exact
         // count and its split between the cache and the uncached remainder.
         const inputCell = fmtIntCompact(rv.totalInputTokens);
-        const inputTitle = inputBreakdown(rv);
+        const inputTip = inputBreakdown(rv);
         return `<tr>
-          <td title="${fmtTimestamp(rv.lastMs)}">${fmtTimestampShort(
-          rv.lastMs
-        )}</td>
-          <td${workspaceTitle}>${escapeHtml(workspaceCell)}</td>
+          <td${tip(fmtTimestamp(rv.lastMs))}>${fmtTimestampShort(rv.lastMs)}</td>
+          <td${workspaceTip}>${escapeHtml(workspaceCell)}</td>
           <td>${escapeHtml(session)}</td>
-          <td title="${escapeHtml(modelTitle)}">${escapeHtml(modelCell)}</td>
-          <td class="num" title="${escapeHtml(inputTitle)}">${inputCell}</td>
+          <td${tip(modelTip)}>${escapeHtml(modelCell)}</td>
+          <td class="num"${tip(inputTip)}>${inputCell}</td>
           <td class="num">${fmtInt(rv.outputTokens)}</td>
           <td class="num">${fmtTokPerSec(rv.totalTokPerSec)} <span class="unit">tok/s</span></td>
         </tr>`;
@@ -227,7 +233,7 @@ export class StatsPanel {
       <h3>Model</h3>
       ${kv([
         // The full id, which the shortened form drops a namespace from, is the
-        // hover title.
+        // tooltip.
         ["Model", fmtModel(v.model), v.model ?? "-"],
         // Endpoint row appears only for a turn Claude Code could not price
         // itself, where which endpoint served it is what decides the figure
@@ -386,7 +392,7 @@ function inputBreakdown(v: TurnView): string {
 function kv(rows: KvRow[]): string {
   return `<div class="kv">${rows
     .map(([k, val, title]) => {
-      const t = title ? ` title="${escapeHtml(title)}"` : "";
+      const t = title ? tip(title) : "";
       return `<div class="k">${escapeHtml(k)}</div><div class="v"${t}>${escapeHtml(
         val
       )}</div>`;
@@ -414,7 +420,24 @@ function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Attributes giving an element the page's own tooltip. The same text is its
+ *  accessible description, the part of a native title that assistive tech
+ *  reads. */
+function tip(text: string): string {
+  const t = escapeHtml(text);
+  return ` data-tip="${t}" aria-description="${t}"`;
+}
+
+/** VS Code's delay before its own hovers appear, which the status bar's uses,
+ *  so the page's tooltips keep the same time. */
+function hoverDelay(): number {
+  return vscode.workspace
+    .getConfiguration("workbench.hover")
+    .get<number>("delay", 500);
 }
 
 /** A fresh nonce for the page's one script, which the CSP admits by it. */
@@ -422,14 +445,33 @@ function newNonce(): string {
   return randomBytes(16).toString("hex");
 }
 
-// The page's one script. It patches each body the extension sends into the
-// live page: a node is kept wherever the new markup has one of the same kind at
-// the same position, and only text and attributes that differ are rewritten, so
-// the cell under the pointer stays the same element and its tooltip survives
-// the redraw. The body element's own attributes are left alone, since VS Code
-// stamps its theme and role there.
+// The page's one script, which does two things.
+//
+// It patches each body the extension sends into the live page: a node is kept
+// wherever the new markup has one of the same kind at the same position, and
+// only text and attributes that differ are rewritten, so the cell under the
+// pointer stays the same element through a redraw. Only #content is patched,
+// leaving the tooltip, this script, and the body's own attributes (where VS
+// Code stamps its theme and role) as they are.
+//
+// It draws the tooltips itself rather than leaving them to native titles,
+// whose timing on macOS the page cannot control: Chromium restarts the
+// system's tooltip delay whenever the pointer crosses onto another node, the
+// edge of a cell's text included, and by default drops the tooltip while the
+// window is not key. Like VS Code's own hovers, a tooltip here appears the
+// hover delay after the pointer reaches an element with one, however it then
+// moves within it, and at once when reached within INSTANT_MS of the last one
+// hiding, so running down a column reads each value without waiting again.
 const PAGE_SCRIPT = `(() => {
   const vscode = acquireVsCodeApi();
+  const content = document.getElementById("content");
+  const tip = document.getElementById("tip");
+  const INSTANT_MS = 200;
+  let delay = Number(tip.dataset.delay) || 0;
+  let target = null;
+  let timer = 0;
+  let hiddenAt = -Infinity;
+
   function patch(live, next) {
     if (live.nodeType !== Node.ELEMENT_NODE) {
       if (live.nodeValue !== next.nodeValue) live.nodeValue = next.nodeValue;
@@ -455,18 +497,72 @@ const PAGE_SCRIPT = `(() => {
     });
     for (const old of have.slice(want.length)) old.remove();
   }
+
+  function show(fade) {
+    timer = 0;
+    if (!target || !target.isConnected || !target.dataset.tip) return hide();
+    tip.textContent = target.dataset.tip;
+    tip.classList.toggle("fade", fade);
+    tip.classList.add("shown");
+    place();
+  }
+  // Below the element, or above it when only that fits, kept inside the page.
+  function place() {
+    const r = target.getBoundingClientRect();
+    const page = document.documentElement;
+    const w = tip.offsetWidth;
+    const h = tip.offsetHeight;
+    const below = r.bottom + 4;
+    const above = r.top - h - 4;
+    const fits = below + h <= page.clientHeight - 8 || above < 8;
+    tip.style.left = Math.max(8, Math.min(r.left, page.clientWidth - w - 8)) + "px";
+    tip.style.top = (fits ? below : above) + "px";
+  }
+  function hide() {
+    clearTimeout(timer);
+    timer = 0;
+    target = null;
+    if (!tip.classList.contains("shown")) return;
+    tip.classList.remove("shown");
+    hiddenAt = performance.now();
+  }
+  document.addEventListener("mouseover", (e) => {
+    const el = e.target instanceof Element ? e.target.closest("[data-tip]") : null;
+    if (el === target) return;
+    hide();
+    if (!el) return;
+    target = el;
+    if (performance.now() - hiddenAt < INSTANT_MS) show(false);
+    else timer = setTimeout(show, delay, true);
+  });
+  document.addEventListener("mouseout", (e) => {
+    if (!e.relatedTarget) hide();
+  });
+  document.addEventListener("mousedown", hide);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hide();
+  });
+  window.addEventListener("scroll", () => {
+    if (tip.classList.contains("shown")) place();
+  }, true);
+
   window.addEventListener("message", (e) => {
     if (e.data?.type !== "body") return;
+    if (typeof e.data.hoverDelay === "number") delay = e.data.hoverDelay;
     // Opened explicitly, the body keeps the leading whitespace that the live
     // page has, which a bare fragment would lose, shifting every position.
     const html = "<body>" + e.data.html;
     const next = new DOMParser().parseFromString(html, "text/html");
-    patchChildren(document.body, next.body);
+    patchChildren(content, next.body);
+    // The element under the pointer kept its identity, but maybe not its value.
+    if (!target) return;
+    if (!target.isConnected || !target.dataset.tip) hide();
+    else if (tip.classList.contains("shown")) show(false);
   });
   vscode.postMessage({ type: "ready" });
 })();`;
 
-function wrapHtml(body: string, nonce: string): string {
+function wrapHtml(body: string, nonce: string, delayMs: number): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -516,8 +612,31 @@ function wrapHtml(body: string, nonce: string): string {
   .note { margin-top: 12px; }
   .empty { text-align: center; padding: 28px 8px; }
   code { background: var(--vscode-textCodeBlock-background); padding: 1px 4px; border-radius: 3px; }
+  /* Drawn like VS Code's own compact hovers (the status bar's among them). Its
+     shadow token is not passed to webviews, so its value is spelled out. */
+  #tip {
+    position: fixed;
+    z-index: 40;
+    display: none;
+    box-sizing: border-box;
+    max-width: min(700px, calc(100vw - 16px));
+    padding: 2px 8px;
+    font-size: 12px;
+    line-height: 19px;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    color: var(--vscode-editorHoverWidget-foreground);
+    background: var(--vscode-editorHoverWidget-background);
+    border: 1px solid var(--vscode-editorHoverWidget-border);
+    border-radius: 5px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.14);
+    pointer-events: none;
+  }
+  #tip.shown { display: block; }
+  #tip.fade { animation: tip-fade 0.1s linear; }
+  .vscode-reduce-motion #tip.fade { animation: none; }
+  @keyframes tip-fade { from { opacity: 0; } }
 </style>
-<script nonce="${nonce}">${PAGE_SCRIPT}</script>
 </head>
-<body>${body}</body></html>`;
+<body><div id="content">${body}</div><div id="tip" aria-hidden="true" data-delay="${delayMs}"></div><script nonce="${nonce}">${PAGE_SCRIPT}</script></body></html>`;
 }
